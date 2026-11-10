@@ -1,9 +1,10 @@
-# Запуск:  docker compose up -d --build
+# Обычный запуск (готовый образ из ghcr.io, обновляется автоматически):  docker compose up -d
+# Сборка из исходников:  docker compose up -d --build
 # Настройки читаются из файла .env (шаблон — .env.example).
 services:
   app:
     build: .
-    image: chat-editor:latest
+    image: ${APP_IMAGE:-ghcr.io/ddimavo/chat-editor:latest}
     container_name: chat-editor
     restart: unless-stopped
     environment:
