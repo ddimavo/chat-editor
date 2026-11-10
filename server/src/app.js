@@ -30,6 +30,11 @@ const q = {
   upsertSit: db.prepare(`INSERT INTO situations (user_id, id, position, name, data, updated_at) VALUES (@uid, @id, @pos, @name, @data, @t)
                          ON CONFLICT(user_id, id) DO UPDATE SET position = @pos, name = @name, data = @data, updated_at = @t`),
   delSit: db.prepare('DELETE FROM situations WHERE user_id = ? AND id = ?'),
+  docs: db.prepare('SELECT id, kind, title, html, updated_at AS t FROM docs WHERE user_id = ? ORDER BY position'),
+  docIds: db.prepare('SELECT id FROM docs WHERE user_id = ?'),
+  upsertDoc: db.prepare(`INSERT INTO docs (user_id, id, position, kind, title, html, updated_at) VALUES (@uid, @id, @pos, @kind, @title, @html, @t)
+    ON CONFLICT(user_id, id) DO UPDATE SET position = excluded.position, kind = excluded.kind, title = excluded.title, html = excluded.html, updated_at = excluded.updated_at`),
+  delDoc: db.prepare('DELETE FROM docs WHERE user_id = ? AND id = ?'),
   imgInfo: db.prepare('SELECT mime, size FROM images WHERE user_id = ? AND id = ?'),
   imgGet: db.prepare('SELECT mime, data FROM images WHERE user_id = ? AND id = ?'),
   imgList: db.prepare('SELECT id, size FROM images WHERE user_id = ? ORDER BY created_at'),
@@ -60,7 +65,7 @@ function createApp() {
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'same-origin');
     res.setHeader('Content-Security-Policy',
-      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; " +
+      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; " +
       "connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'");
     next();
   });
@@ -176,7 +181,7 @@ function createApp() {
     const uid = req.user.id, st = q.state.get(uid);
     if (!st) return res.json({ project: null, rev: 0 });
     const sits = q.sits.all(uid).map(r => JSON.parse(r.data));
-    res.json({ project: { v: 2, settings: JSON.parse(st.settings), sa: st.active, sits }, rev: st.rev });
+    res.json({ project: { v: 2, settings: JSON.parse(st.settings), sa: st.active, sits, docs: q.docs.all(uid) }, rev: st.rev });
   });
 
   app.put('/api/project', needAuth, json, (req, res) => {
@@ -188,12 +193,26 @@ function createApp() {
       if (!s || typeof s.id !== 'string' || !ID_RE.test(s.id) || ids.has(s.id) || !Array.isArray(s.frames)) return res.status(400).json({ error: 'Некорректная ситуация в проекте.' });
       ids.add(s.id);
     }
+    let docs = null;                                                         // публикации: если поле не прислано (старый клиент) — не трогаем
+    if (p.docs !== undefined) {
+      if (!Array.isArray(p.docs) || p.docs.length > 1000) return res.status(400).json({ error: 'Слишком много публикаций (максимум 1000).' });
+      const dids = new Set();
+      for (const d of p.docs) {
+        if (!d || typeof d.id !== 'string' || !ID_RE.test(d.id) || dids.has(d.id) || typeof d.html !== 'string' || d.html.length > 4e6) return res.status(400).json({ error: 'Некорректная публикация в проекте.' });
+        dids.add(d.id);
+      }
+      docs = { list: p.docs, ids: dids };
+    }
     const t = now();
     const result = db.transaction(() => {
       const st = q.state.get(uid), rev = st ? st.rev : 0;
       if ((base ?? 0) !== rev) return { conflict: rev };                    // кто-то другой уже сохранил новую версию
       for (const [i, s] of p.sits.entries()) q.upsertSit.run({ uid, id: s.id, pos: i, name: String(s.name || '').slice(0, 200), data: JSON.stringify(s), t });
       for (const { id } of q.sitIds.all(uid)) if (!ids.has(id)) q.delSit.run(uid, id);
+      if (docs) {
+        for (const [i, d] of docs.list.entries()) q.upsertDoc.run({ uid, id: d.id, pos: i, kind: String(d.kind || 'other').slice(0, 20), title: String(d.title || '').slice(0, 200), html: d.html, t: Number(d.t) || t });
+        for (const { id } of q.docIds.all(uid)) if (!docs.ids.has(id)) q.delDoc.run(uid, id);
+      }
       q.upsertState.run({ uid, settings: JSON.stringify(p.settings), active: Math.max(0, Math.min(p.sits.length - 1, p.sa | 0)), rev: rev + 1, t });
       return { rev: rev + 1 };
     })();

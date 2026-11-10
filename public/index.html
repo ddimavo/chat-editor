@@ -214,6 +214,59 @@
   .autherr { color:var(--danger); font-size:12.5px; min-height:38px; margin:10px 0 6px; line-height:1.4; }
   #saveState { font-size:11.5px; white-space:nowrap; } #saveState[data-s="saving"] { color:var(--muted); } #saveState[data-s="error"] { color:var(--danger); font-weight:600; }
   #userName { max-width:120px; overflow:hidden; text-overflow:ellipsis; display:inline-block; vertical-align:bottom; }
+
+  /* ---------- раздел «Публикации» ---------- */
+  #modeSw { display:flex; gap:2px; padding:3px; background:var(--panel2); border:1px solid var(--border); border-radius:10px; flex:none; }
+  #modeSw button { border:0; background:transparent; padding:5px 12px; font-weight:600; color:var(--muted); }
+  #modeSw button.active { background:var(--accent-soft); color:var(--accent); }
+  #app[data-mode="docs"] #body, #app[data-mode="docs"] #sitTabs, #app[data-mode="docs"] #addSit, #app[data-mode="docs"] #copy, #app[data-mode="docs"] #exBtn { display:none; }
+  #app:not([data-mode="docs"]) #docsView { display:none; }
+  #docsView { display:grid; grid-template-columns:var(--wl) minmax(0,1fr) var(--wr); min-height:0; }
+  #dcLeft { display:flex; flex-direction:column; min-height:0; background:var(--panel); border-right:1px solid var(--border); }
+  #dcKinds { display:flex; flex-wrap:wrap; gap:5px; padding:0 12px 10px; }
+  #dcKinds button { padding:3px 9px; font-size:12px; border-radius:999px; background:transparent; color:var(--muted); }
+  #dcKinds button i { font-style:normal; opacity:.7; margin-left:3px; font-size:11px; }
+  #dcKinds button.active { background:var(--accent-soft); color:var(--accent); border-color:var(--accent-soft); font-weight:600; }
+  #dcList { flex:1; min-height:0; overflow-y:auto; padding:0 12px 10px; }
+  .dcard { position:relative; padding:10px 12px; border:1px solid var(--border); border-radius:var(--rs); margin-bottom:7px; cursor:pointer; background:var(--panel2); }
+  .dcard:hover { border-color:var(--hover); background:var(--panel3); }
+  .dcard.active { border-color:var(--accent); background:var(--accent-soft); }
+  .dcard .dk { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--accent); }
+  .dcard .dt { font-weight:600; margin:1px 0; padding-right:70px; } .dcard .dm { font-size:11.5px; }
+  .dcard .dacts { position:absolute; right:8px; top:8px; display:none; gap:4px; } .dcard:hover .dacts { display:flex; }
+  #dcCenter { display:grid; grid-template-rows:minmax(0,1fr); min-width:0; min-height:0; background:var(--bg); position:relative; }
+  #dcEmpty { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; text-align:center; padding:30px; color:var(--muted); }
+  #dcEmpty h2 { margin:0; color:var(--text); font-size:20px; }
+  #dcWork { display:none; grid-template-rows:auto auto minmax(0,1fr); min-height:0; min-width:0; }
+  #dcHead { display:flex; gap:8px; align-items:center; padding:10px 14px; background:var(--panel); border-bottom:1px solid var(--border); min-width:0; }
+  #dcHead input[type=text] { font-weight:600; max-width:420px; } #dcHead select { width:auto; }
+  #dcTools { display:flex; flex-direction:column; gap:8px; padding:8px 14px; background:var(--panel); border-bottom:1px solid var(--border); }
+  .trow { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  #dcTools .tgroup button.on { background:var(--accent-soft); color:var(--accent); }
+  #dcTools .tgroup button.active, #dcModes button.active { background:var(--accent); color:#fff; }
+  #dcTools input[type=color] { width:32px; height:30px; padding:1px; }
+  #dcTools select { width:auto; padding:5px 8px; }
+  #dcFmt { display:flex; gap:8px; align-items:center; }
+  #dcStage { position:relative; min-height:0; background:var(--stage); }
+  #dcFrameBox { position:absolute; inset:0; } #dcFrameBox iframe { width:100%; height:100%; }
+  #dcCodeBox { position:absolute; inset:0; flex-direction:column; padding:12px; gap:8px; display:none; }
+  #dcCode { flex:1; height:auto !important; resize:none; font:12.5px/1.5 ui-monospace,Consolas,monospace; white-space:pre; }
+  #dcRight { display:flex; flex-direction:column; min-height:0; background:var(--panel); border-left:1px solid var(--border); }
+  #dcRTabs { display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--border); flex:none; }
+  #dcRTabs .tab .cnt { background:var(--accent); color:#fff; border-radius:999px; padding:0 6px; font-size:11px; margin-left:3px; }
+  #dcFieldsPane, #dcElPane { flex:1; min-height:0; overflow-y:auto; padding:14px; scrollbar-gutter:stable; }
+  .fld { margin-bottom:12px; } .fld label { margin-bottom:3px; } .frow { display:flex; gap:5px; align-items:center; } .frow input { flex:1; }
+  code { background:var(--panel3); border-radius:4px; padding:0 4px; font-size:11.5px; }
+  .crumbs { display:flex; flex-wrap:wrap; gap:2px 4px; align-items:center; font-size:12px; color:var(--faint); }
+  .crumbs a { color:var(--muted); text-decoration:none; padding:1px 6px; border-radius:5px; background:var(--panel3); } .crumbs a.cur { background:var(--accent); color:#fff; }
+  .pseg { display:flex; gap:4px; margin-bottom:8px; } .pseg button { flex:1; padding:5px 0; }
+  .pgrid { display:grid; grid-template-columns:1fr 1fr; gap:8px 10px; margin-bottom:10px; } .pgrid label { font-size:11.5px; margin-bottom:2px; }
+  .sep { border-top:1px solid var(--border); margin:14px 0 10px; }
+  #dcImpModal .mb { grid-template-columns:minmax(320px,440px) minmax(0,1fr); }
+  #dcImpSrc { height:46vh; resize:none; white-space:pre; }
+  #dcImpPrev { width:100%; height:100%; min-height:300px; border:1px solid var(--border); border-radius:var(--rs); background:#e4e8ef; }
+  @media (max-width:1180px) { #docsView { grid-template-columns:var(--wl) minmax(0,1fr) var(--wr); } }
+  @media (max-width:980px) { #docsView { grid-template-columns:1fr; } #dcLeft { max-height:40vh; border-right:0; } #dcCenter { height:80vh; } #dcRight { height:70vh; } }
   @media (max-width:1180px) { :root { --wl:330px; --wr:300px; } }
   @media (max-width:980px) {
     html, body { overflow:auto; } #app { height:auto; grid-template-rows:56px auto; }
@@ -228,6 +281,7 @@
 <!-- ================= ВЕРХНЯЯ ПАНЕЛЬ ================= -->
 <header id="topbar">
   <div class="brand"><span class="logo">SA</span><b>Chat Studio</b></div>
+  <div id="modeSw"><button data-mode="shots" class="active" title="Реплики и скриншоты">🖼 Скриншоты</button><button data-mode="docs" title="Пресс-релизы, газеты, статьи, эфиры, анонсы — HTML-заготовки">📰 Публикации</button></div>
   <nav id="sitTabs" aria-label="Ситуации"></nav>
   <button id="addSit" class="ibtn" title="Новая ситуация">＋</button>
   <div class="sp"></div>
@@ -463,6 +517,85 @@
 </aside>
 
 </div><!-- #body -->
+
+<!-- ================= РАЗДЕЛ «ПУБЛИКАЦИИ» ================= -->
+<div id="docsView">
+  <aside id="dcLeft">
+    <div class="phead"><b>Публикации</b><span class="sp"></span><button id="dcBlank" class="sm" title="Пустая статья">＋ Пустая</button><button id="dcNew" class="sm primary">Вставить HTML</button></div>
+    <div style="padding:0 12px 10px"><input type="text" id="dcSearch" placeholder="Поиск по названию…"></div>
+    <div id="dcKinds"></div>
+    <div id="dcList"></div>
+  </aside>
+  <main id="dcCenter">
+    <div id="dcEmpty">
+      <h2>Публикации</h2>
+      <div style="max-width:440px">Вставьте HTML-заготовку пресс-релиза, газеты, статьи, анонса или эфира — она отобразится как на сайте, и её можно будет править прямо в окне: текст, картинки, цвета, блоки.</div>
+      <div class="bar"><button id="dcEmptyImp" class="primary">Вставить HTML</button><button id="dcEmptyBlank">Пустая статья</button></div>
+    </div>
+    <div id="dcWork">
+      <div id="dcHead">
+        <input type="text" id="dcTitle" placeholder="Название публикации" maxlength="120">
+        <select id="dcKind" title="Раздел"></select>
+        <span class="sp"></span>
+        <div class="menuwrap">
+          <button data-menu class="primary">Экспорт ▾</button>
+          <div class="menu">
+            <button id="dcCopy">Копировать HTML-код</button>
+            <button id="dcCopyEmb">Копировать код с встроенными картинками</button>
+            <button id="dcDlHtml">Скачать .html</button>
+            <button id="dcDlPng">Скачать PNG</button>
+          </div>
+        </div>
+      </div>
+      <div id="dcTools">
+        <div class="trow"><div class="tgroup" id="dcModes"><button data-m="visual" class="active">Визуально</button><button data-m="view">Просмотр</button><button data-m="code">Код</button></div>
+          <span class="sp"></span>
+          <span class="dg">Фон <select id="dcBg" title="Фон вокруг публикации (в экспорт PNG тоже)"><option value="grey">серый</option><option value="white">белый</option><option value="dark">тёмный</option></select></span>
+        <span class="dg">Ширина <select id="dcWidth"><option value="auto">во всё окно</option><option value="1000">1000</option><option value="820">820</option><option value="600">600</option><option value="420">420 (телефон)</option></select></span>
+        </div>
+        <div class="trow"><div id="dcFmt">
+          <div class="tgroup"><button id="dcUndo" title="Отменить (Ctrl+Z)">↶</button><button id="dcRedo" title="Повторить">↷</button></div>
+          <div class="tgroup"><button id="dcB" title="Жирный (Ctrl+B)"><b>B</b></button><button id="dcI" title="Курсив (Ctrl+I)"><i>I</i></button><button id="dcU" title="Подчёркнутый (Ctrl+U)"><u>U</u></button><button id="dcS" title="Зачёркнутый"><s>S</s></button></div>
+          <div class="tgroup"><button id="dcAL" title="По левому краю">⇤</button><button id="dcAC" title="По центру">↔</button><button id="dcAR" title="По правому краю">⇥</button><button id="dcAJ" title="По ширине">☰</button></div>
+          <div class="tgroup"><button id="dcUL" title="Маркированный список">•≡</button><button id="dcOL" title="Нумерованный список">1≡</button><button id="dcLink" title="Ссылка">🔗</button><button id="dcClr" title="Убрать форматирование выделенного">Tx</button></div>
+          <input type="color" id="dcFg" value="#c0392b" title="Цвет выделенного текста"><input type="color" id="dcHl" value="#fff176" title="Маркер (фон выделенного текста)">
+          <select id="dcSize" title="Размер выделенного текста"><option value="">Размер</option><option>11</option><option>12</option><option>13</option><option>14</option><option>16</option><option>18</option><option>20</option><option>24</option><option>28</option><option>32</option><option>40</option><option>48</option></select>
+        </div></div>
+      </div>
+      <div id="dcStage">
+        <div id="dcFrameBox"></div>
+        <div id="dcCodeBox"><div class="hint">HTML-код публикации. Правки применяются автоматически; небезопасные теги (script, iframe, формы) и обработчики onclick удаляются.</div><textarea id="dcCode" spellcheck="false"></textarea></div>
+      </div>
+    </div>
+  </main>
+  <aside id="dcRight">
+    <div id="dcRTabs" class="tabs"><button class="tab active" data-t="fields">Поля шаблона<span class="cnt" id="dcFieldCount"></span></button><button class="tab" data-t="el">Элемент и блоки</button></div>
+    <div id="dcFieldsPane">
+      <div class="hint" style="margin-bottom:12px">Заглушки вида <code>ДАТА_ПУБЛИКАЦИИ</code> найдены автоматически. Впишите значение и нажмите Enter — оно подставится везде, где встречается.</div>
+      <div id="dcFieldList"></div>
+    </div>
+    <div id="dcElPane" style="display:none"><div id="dcElBox"></div></div>
+  </aside>
+</div>
+
+<!-- Окно: вставка HTML -->
+<div id="dcImpModal" class="modal" style="display:none">
+  <div class="mdl" style="width:min(1200px,100%)">
+    <div class="mh"><b>Вставить HTML-заготовку</b><button id="dcImpClose" class="x">✕</button></div>
+    <div class="mb">
+      <div>
+        <label>Код (можно целиком, вместе с комментариями)</label>
+        <textarea id="dcImpSrc" spellcheck="false" placeholder="Вставьте HTML сюда…"></textarea>
+        <div class="bar"><button id="dcImpFileBtn" class="sm">…или открыть .html файл</button><input type="file" id="dcImpFile" accept=".html,.htm,text/html,.txt" hidden></div>
+        <div class="grid" style="grid-template-columns:1fr 150px;margin-top:12px"><div><label>Название</label><input type="text" id="dcImpTitle" placeholder="Определится автоматически"></div><div><label>Раздел</label><select id="dcImpKind"></select></div></div>
+        <div class="hint">Скрипты, формы, iframe и onclick-обработчики при вставке удаляются: заготовка только отображается и правится.</div>
+      </div>
+      <div><label>Так это будет выглядеть</label><iframe id="dcImpPrev" sandbox title="Предпросмотр"></iframe></div>
+    </div>
+    <div class="mf"><span class="sp"></span><button id="dcImpCancel">Отмена</button><button id="dcImpOk" class="primary" disabled>Добавить в «Публикации»</button></div>
+  </div>
+</div>
+
 </div><!-- #app -->
 
 <div id="toast"></div>
@@ -600,6 +733,7 @@
 <datalist id="nicks"></datalist>
 <datalist id="sfxList"></datalist>
 
+<script src="docs.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const rowsEl = $('rows');
@@ -1380,13 +1514,15 @@ $('bgBtn').onclick = () => $('bgFile').click();
 $('bgFile').onchange = e => { addScreenshots(e.target.files); e.target.value = ''; };
 $('bgClear').onclick = () => { const f = F(); f.hasBg = false; f.bgImg = null; f.imgId = ''; f._bgProc = null; sel = 'text'; applyFrame(); renderLayersUI(); afterChange(); };
 window.addEventListener('paste', e => {
+  if (Docs.isOpen()) return;
   const files = [...(e.clipboardData?.items || [])].filter(i => i.type.startsWith('image/')).map(i => i.getAsFile());
   if (files.length) addScreenshots(files);
 });
-document.addEventListener('dragover', e => { e.preventDefault(); $('stage').classList.add('drop'); });
+document.addEventListener('dragover', e => { e.preventDefault(); if (!Docs.isOpen()) $('stage').classList.add('drop'); });
 document.addEventListener('dragleave', e => { e.preventDefault(); $('stage').classList.remove('drop'); });
 document.addEventListener('drop', e => {
   e.preventDefault(); $('stage').classList.remove('drop');
+  if (Docs.isOpen()) return;
   if ($('layersSec').contains(e.target) && F().hasBg) addLayerFiles(e.dataTransfer.files); else addScreenshots(e.dataTransfer.files);
 });
 window.addEventListener('resize', () => { if (curText) { fit(); draw(); } });
@@ -1865,7 +2001,7 @@ $('layerFile').onchange = e => { addLayerFiles(e.target.files); e.target.value =
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && pickMode) { pickMode = false; view.style.cursor = ''; renderProps(); return; }
-  if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName) || !curSit) return;
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName) || !curSit || Docs.isOpen()) return;
   const f = F(); if (!f || !f.hasBg) return;
   const L = selImg(f);
   if ((e.key === 'Delete' || e.key === 'Backspace') && L) { delLayer(L.id); e.preventDefault(); return; }
@@ -1988,7 +2124,7 @@ function save(now) {
   saveT = setTimeout(async () => {
     if (!curSit) return;
     flushState();
-    const data = { v:2, settings:readSettings(), sa:sits.indexOf(curSit), sits:sits.map(sitMeta) };
+    const data = { v:2, settings:readSettings(), sa:sits.indexOf(curSit), sits:sits.map(sitMeta), docs:Docs.serialize() };
     if (Auth.blocked) return;
     setSaveState('saving');
     try { await DB.set('kv', 'project', data); setSaveState('saved'); }
@@ -2009,7 +2145,7 @@ window.addEventListener('pagehide', () => save(true));
 async function gcImages() {                // удалить картинки, на которые больше никто не ссылается
   try {
     const keys = await DB.keys('img');
-    const used = new Set(); sits.forEach(s => s.frames.forEach(f => { if (f.imgId) used.add(f.imgId); f.layers.forEach(L => L.imgId && used.add(L.imgId)); }));
+    const used = Docs.usedImageIds(); sits.forEach(s => s.frames.forEach(f => { if (f.imgId) used.add(f.imgId); f.layers.forEach(L => L.imgId && used.add(L.imgId)); }));
     for (const k of keys) {
       if (used.has(k) || Date.now() - (recentImgs.get(k) || 0) < 60000) continue;
       await DB.del('img', k);
@@ -2040,6 +2176,7 @@ async function exportSits(list, name) {
     }
     out.situations.push(m);
   }
+  if (list === sits) { out.docs = []; for (const d of Docs.serialize()) out.docs.push({ ...d, html: await Docs.inline(d.html) }); }
   downloadBlob(new Blob([JSON.stringify(out)], { type:'application/json' }), name + '.json');
 }
 $('expAll').onclick = () => exportSits(sits, 'samp-chat-проект');
@@ -2050,7 +2187,9 @@ $('impFile').onchange = async e => {
   try {
     const d = JSON.parse(await file.text());
     const list = d.situations || [];
-    if (!list.length) throw new Error('В файле нет ситуаций');
+    if (Array.isArray(d.docs)) for (const x of d.docs) Docs.add({ ...x, html: await Docs.uploadEmbedded(x.html) });
+    if (!list.length && !(d.docs || []).length) throw new Error('В файле нет ситуаций');
+    if (!list.length) { toast('Публикаций импортировано: ' + d.docs.length); save(true); Docs.start(); return; }
     flushState();
     for (const m of list) {
       const s = normSit({ ...m, id:uid(), frames:[] });
@@ -2448,6 +2587,7 @@ $('docAll').onclick = () => exportDoc(sits, 'Структура - все сит�
 /* ---- загрузка проекта (+ миграция со старой версии) ---- */
 async function loadProject() {
   const d = await DB.get('kv', 'project');     // ошибка сети/сервера всплывает наверх — данные не затираются пустым проектом
+  Docs.load(d && d.docs);
   try {
     if (!d) return null;
     if (d.v === 2) {
@@ -2464,7 +2604,7 @@ async function loadProject() {
         if (o.hasBg && o.bgData) f.imgId = await putImage(dataURLtoBlob(o.bgData)); else f.hasBg = false;
         delete f.bgData; s.frames.push(f);
       }
-      sits = [s]; await DB.set('kv', 'project', { v:2, settings:readSettings(), sa:0, sits:sits.map(sitMeta) });
+      sits = [s]; await DB.set('kv', 'project', { v:2, settings:readSettings(), sa:0, sits:sits.map(sitMeta), docs:Docs.serialize() });
       return 0;
     }
   } catch (e) { console.warn('load failed', e); }
@@ -2797,6 +2937,7 @@ async function boot() {
     sits = [s]; idx = 0;
   }
   initUI();
+  Docs.start();
   await (document.fonts?.ready || Promise.resolve());
   await switchSit(idx);
   clearTimeout(gcT); gcT = setTimeout(() => { gcImages(); updateStorage(); }, 4000);

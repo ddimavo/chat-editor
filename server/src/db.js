@@ -55,6 +55,17 @@ const MIGRATIONS = [
     created_at INTEGER NOT NULL,
     PRIMARY KEY (user_id, id)
   );`,
+  /* 2 */ `
+  CREATE TABLE docs (                     -- публикации: HTML-заготовки (пресс-релизы, газеты, статьи…)
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    title TEXT NOT NULL,
+    html TEXT NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, id)
+  );`,
 ];
 
 const cur = db.pragma('user_version', { simple: true });
