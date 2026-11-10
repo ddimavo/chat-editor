@@ -1,0 +1,8 @@
+# Используется только с профилем https:  docker compose --profile https up -d
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:8000
+	request_body {
+		max_size 45MB
+	}
+}

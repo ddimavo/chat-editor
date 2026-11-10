@@ -1,0 +1,2809 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Chat Studio — редактор чата SA-MP</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<script>
+  // тема выставляется до отрисовки, чтобы не было «мигания»
+  (function () {
+    var t = null; try { t = localStorage.getItem('sampTheme'); } catch (e) {}
+    if (!t) t = window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+<style>
+  :root { --r:12px; --rs:8px; --font:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; --wl:372px; --wr:336px; }
+  :root[data-theme="dark"] {
+    color-scheme:dark;
+    --bg:#0d0f14; --panel:#151922; --panel2:#1b202b; --panel3:#232a37; --hover:#2b3444; --border:#2a313f;
+    --text:#e8ebf3; --muted:#8e97aa; --faint:#5d6679;
+    --accent:#5b8cff; --accent2:#3f70f2; --accent-soft:rgba(91,140,255,.18);
+    --danger:#f0646a; --danger-soft:rgba(240,100,106,.16);
+    --input:#0e1117; --stage:#090b0f; --chk1:#222836; --chk2:#1a1f2b; --sel:#ffb020;
+    --shadow:0 14px 48px rgba(0,0,0,.55);
+  }
+  :root[data-theme="light"] {
+    color-scheme:light;
+    --bg:#e9edf3; --panel:#ffffff; --panel2:#f5f7fa; --panel3:#eaeef4; --hover:#dfe5ee; --border:#dde2eb;
+    --text:#1a1f2c; --muted:#667085; --faint:#9aa3b5;
+    --accent:#2f6df6; --accent2:#1e57d8; --accent-soft:rgba(47,109,246,.13);
+    --danger:#d6303c; --danger-soft:rgba(214,48,60,.1);
+    --input:#ffffff; --stage:#d9dee7; --chk1:#cdd3de; --chk2:#c0c7d4; --sel:#e08400;
+    --shadow:0 14px 48px rgba(25,35,70,.2);
+  }
+  * { box-sizing:border-box; }
+  html, body { height:100%; margin:0; overflow:hidden; }
+  body { font:13.5px/1.45 var(--font); background:var(--bg); color:var(--text); -webkit-font-smoothing:antialiased; }
+  ::-webkit-scrollbar { width:10px; height:10px; } ::-webkit-scrollbar-thumb { background:var(--panel3); border-radius:6px; border:2px solid transparent; background-clip:content-box; }
+  ::-webkit-scrollbar-thumb:hover { background:var(--hover); background-clip:content-box; border:2px solid transparent; } ::-webkit-scrollbar-track { background:transparent; }
+  .sp { flex:1; } .muted { color:var(--muted); } .ellipsis { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+
+  /* ---------- базовые элементы ---------- */
+  button { font:inherit; color:var(--text); background:var(--panel3); border:1px solid var(--border); border-radius:var(--rs); padding:6px 12px; cursor:pointer; line-height:1.2; white-space:nowrap; transition:background .12s,border-color .12s; }
+  button:hover:not(:disabled) { background:var(--hover); }
+  button:disabled { opacity:.42; cursor:not-allowed; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  button.primary:hover:not(:disabled) { background:var(--accent2); border-color:var(--accent2); }
+  button.x { background:var(--danger-soft); border-color:transparent; color:var(--danger); }
+  button.x:hover:not(:disabled) { background:var(--danger); color:#fff; }
+  button.sm { padding:3px 9px; font-size:12px; }
+  button.ibtn { width:34px; height:34px; padding:0; display:inline-grid; place-items:center; font-size:16px; }
+  button.wide { width:100%; }
+  input[type=text], input[type=password], input[type=number], select, textarea { width:100%; min-width:0; background:var(--input); color:var(--text); border:1px solid var(--border); border-radius:var(--rs); padding:6px 9px; font:inherit; }
+  input[type=text]:focus, input[type=password]:focus, input[type=number]:focus, select:focus, textarea:focus { outline:3px solid var(--accent-soft); border-color:var(--accent); }
+  input[type=color] { width:100%; height:32px; padding:2px; background:var(--input); border:1px solid var(--border); border-radius:var(--rs); cursor:pointer; }
+  input[type=checkbox], input[type=radio] { accent-color:var(--accent); width:15px; height:15px; margin:0; flex:none; }
+  input[type=range] { accent-color:var(--accent); }
+  label { display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+  .check, .opt { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text); margin:8px 0; cursor:pointer; }
+  .opt { font-size:12.5px; margin:5px 0; }
+  .hint { font-size:12px; color:var(--muted); line-height:1.5; }
+  .bar { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; align-items:center; }
+  .grid { display:grid; gap:10px; margin-bottom:10px; } .grid3 { display:grid; gap:10px; grid-template-columns:repeat(3,minmax(0,1fr)); margin-top:10px; }
+  .field { margin-bottom:10px; }
+  .card { background:var(--panel2); border:1px solid var(--border); border-radius:var(--r); padding:13px; margin-bottom:12px; }
+  .card > h2 { margin:0 0 10px; font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); }
+  details > summary { cursor:pointer; color:var(--muted); font-size:12px; user-select:none; }
+
+  /* ---------- каркас: всё на один экран, панели прокручиваются внутри ---------- */
+  #app { display:grid; grid-template-rows:56px minmax(0,1fr); height:100vh; height:100dvh; }
+  #topbar { display:flex; align-items:center; gap:10px; padding:0 14px; background:var(--panel); border-bottom:1px solid var(--border); min-width:0; }
+  .brand { display:flex; align-items:center; gap:9px; font-size:14px; white-space:nowrap; }
+  .logo { width:28px; height:28px; border-radius:8px; background:linear-gradient(135deg,var(--accent),#8d6bff); color:#fff; display:grid; place-items:center; font-weight:800; font-size:12px; }
+  #sitTabs { display:flex; gap:4px; overflow-x:auto; min-width:0; flex:0 1 auto; max-width:46vw; padding:2px; scrollbar-width:none; }
+  #sitTabs::-webkit-scrollbar { display:none; }
+  .stab { display:flex; align-items:center; gap:7px; padding:6px 8px 6px 12px; border-radius:999px; cursor:pointer; white-space:nowrap; color:var(--muted); border:1px solid transparent; max-width:220px; font-weight:500; }
+  .stab:hover { background:var(--panel3); color:var(--text); }
+  .stab.active { background:var(--accent-soft); color:var(--accent); border-color:var(--accent-soft); font-weight:600; }
+  .stab .nm { overflow:hidden; text-overflow:ellipsis; }
+  .stab .cnt { font-size:11px; background:var(--panel3); color:var(--muted); border-radius:999px; padding:0 7px; }
+  .stab.active .cnt { background:var(--accent); color:#fff; }
+  .stab button { padding:0 6px; font-size:11px; background:transparent; border:0; color:var(--faint); }
+  .stab button:hover { background:var(--danger); color:#fff; }
+  #storInfo { font-size:11.5px; white-space:nowrap; }
+  .menuwrap { position:relative; }
+  .menu { position:absolute; right:0; top:calc(100% + 6px); min-width:240px; background:var(--panel); border:1px solid var(--border); border-radius:var(--r); box-shadow:var(--shadow); padding:6px; display:none; z-index:60; }
+  .menuwrap.open .menu { display:block; }
+  .menu button { display:block; width:100%; text-align:left; background:transparent; border:0; padding:8px 10px; }
+  .menu button:hover { background:var(--panel3); }
+
+  #body { display:grid; grid-template-columns:var(--wl) minmax(0,1fr) var(--wr); min-height:0; }
+  .side { display:flex; flex-direction:column; min-height:0; min-width:0; background:var(--panel); }
+  #left { border-right:1px solid var(--border); } #right { border-left:1px solid var(--border); display:grid; grid-template-columns:minmax(0,1fr); grid-template-rows:252px minmax(0,1fr); }
+  .tabs { display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--border); flex:none; }
+  .tab { background:transparent; border:0; border-bottom:2px solid transparent; border-radius:0; padding:9px 12px; color:var(--muted); font-weight:600; }
+  .tab:hover:not(:disabled) { background:transparent; color:var(--text); }
+  .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+  .tabpanel { display:none; flex:1; min-height:0; flex-direction:column; }
+  .tabpanel.active { display:flex; }
+  .scroll { flex:1; min-height:0; overflow-y:auto; padding:14px 14px 6px; scrollbar-gutter:stable; }
+  .panel-foot { flex:none; padding:10px 14px 14px; border-top:1px solid var(--border); background:var(--panel); }
+  .addgrid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin-bottom:8px; }
+  .addgrid button { padding:7px 4px; font-size:12.5px; }
+  .phead { display:flex; align-items:center; gap:8px; padding:10px 12px; flex:none; min-width:0; }
+  .phead b { font-size:12px; letter-spacing:.06em; text-transform:uppercase; }
+
+  /* ---------- центр ---------- */
+  #center { display:grid; grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr) auto; min-width:0; min-height:0; background:var(--bg); }
+  #toolbar { display:flex; align-items:center; gap:8px; padding:10px 14px; overflow-x:auto; scrollbar-width:none; background:var(--panel); border-bottom:1px solid var(--border); }
+  #toolbar::-webkit-scrollbar { display:none; }
+  .tgroup { display:flex; gap:4px; padding:3px; background:var(--panel2); border:1px solid var(--border); border-radius:10px; }
+  .tgroup button { border:0; background:transparent; padding:5px 10px; font-size:12.5px; }
+  .tgroup button:hover:not(:disabled) { background:var(--hover); }
+  #zVal { min-width:72px; text-align:center; }
+  #stage { position:relative; display:flex; overflow:auto; background:var(--stage); scrollbar-gutter:stable both-edges; min-height:0; }
+  #stage.drop { outline:3px dashed var(--accent); outline-offset:-8px; }
+  #pv { margin:24px; padding:0; }
+  #pv.edit { margin:auto; padding:0; }
+  #pv:not(.edit) #view { background:repeating-conic-gradient(var(--chk1) 0% 25%, var(--chk2) 0% 50%) 0 0/16px 16px; border-radius:4px; }
+  #pv.dark:not(.edit) #view { background:#1d1d1f; }
+  #view { display:block; touch-action:none; }
+  #dock { background:var(--panel); border-top:1px solid var(--border); padding:8px 14px 10px; }
+  .dockrow { display:flex; align-items:center; gap:16px; overflow-x:auto; scrollbar-width:none; white-space:nowrap; padding-bottom:6px; }
+  .dockrow::-webkit-scrollbar { display:none; }
+  .dg { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); }
+  .dg input { width:66px; padding:4px 6px; font-size:12.5px; }
+  #hint { height:36px; overflow:hidden; font-size:12px; color:var(--muted); line-height:1.5; }
+
+  /* ---------- реплики ---------- */
+  .tcbar { display:flex; align-items:center; gap:8px; margin-bottom:12px; padding:9px 10px; background:var(--panel2); border:1px solid var(--border); border-radius:var(--r); flex-wrap:wrap; }
+  .tcbar .check { margin:0; } .tcbar input[type=color] { width:38px; height:28px; } .tcbar select { width:auto; padding:4px 8px; }
+  .row { display:grid; grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"t b" "f f"; gap:8px; align-items:center; padding:10px; background:var(--panel2); border:1px solid var(--border); border-radius:var(--r); margin-bottom:8px; }
+  .row > :nth-child(1) { grid-area:t; } .row > .fields { grid-area:f; } .row > :nth-child(3) { grid-area:b; }
+  .row .type { max-width:190px; font-weight:600; }
+  .row .up, .row .dn, .row .x { padding:3px 8px; }
+  .row .fields input[type=text] { font-size:13px; }
+  .prow { display:grid; grid-template-columns:minmax(0,1fr) 62px 80px auto; gap:6px; margin-bottom:6px; }
+  .prow button { padding:3px 9px; }
+
+  /* ---------- кадры ---------- */
+  #framesPanel { display:flex; flex-direction:column; min-height:0; border-bottom:1px solid var(--border); }
+  #tiles { flex:1; min-height:0; overflow-y:auto; padding:2px 12px 12px; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; align-content:start; scrollbar-gutter:stable; }
+  .tile { background:var(--panel2); border:2px solid var(--border); border-radius:10px; padding:6px; cursor:pointer; min-width:0; }
+  .tile:hover { border-color:var(--faint); }
+  .tile.active { border-color:var(--accent); background:var(--accent-soft); }
+  .tile canvas { display:block; width:100%; height:78px; object-fit:contain; border-radius:6px; background:repeating-conic-gradient(var(--chk1) 0% 25%, var(--chk2) 0% 50%) 0 0/10px 10px; }
+  .tile .meta { display:flex; align-items:center; gap:4px; margin-top:6px; min-width:0; }
+  .tile .nm { flex:1; font-size:12px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  .tile button { padding:1px 6px; font-size:11px; }
+
+  /* ---------- слои ---------- */
+  #layersSec { display:grid; grid-template-columns:minmax(0,1fr); grid-template-rows:auto 200px minmax(0,1fr); min-height:0; }
+  #layersSec .phead { gap:6px; flex-wrap:nowrap; } #layersSec .phead .sm { padding:3px 8px; }
+  #layerList { overflow-y:auto; padding:0 12px 6px; scrollbar-gutter:stable; }
+  #layerProps { overflow-y:auto; padding:10px 12px 16px; border-top:1px solid var(--border); scrollbar-gutter:stable; }
+  .empty { color:var(--muted); font-size:12.5px; padding:14px 6px; text-align:center; line-height:1.5; }
+  .li { display:flex; align-items:center; gap:6px; padding:4px 6px; background:var(--panel2); border:2px solid var(--border); border-radius:9px; margin-bottom:5px; cursor:pointer; min-width:0; }
+  .li:hover { border-color:var(--faint); }
+  .li.sel { border-color:var(--sel); background:var(--accent-soft); }
+  .li.hid { opacity:.55; }
+  .li canvas { width:36px; height:28px; border-radius:4px; flex:none; background:repeating-conic-gradient(var(--chk1) 0% 25%, var(--chk2) 0% 50%) 0 0/8px 8px; }
+  .li .nm { flex:1; min-width:0; font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .li button { padding:1px 6px; font-size:12px; }
+  .li .eye { width:24px; padding:1px 0; }
+  .pgroup { border:1px solid var(--border); background:var(--panel2); border-radius:var(--r); padding:10px 12px; margin-bottom:10px; }
+  .pgroup > h3 { margin:0 0 8px; font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+  .srow { display:grid; grid-template-columns:112px minmax(0,1fr) 56px; gap:8px; align-items:center; margin-bottom:6px; }
+  .srow label { margin:0; cursor:default; font-size:12px; }
+  .srow input[type=range] { width:100%; }
+  .srow input[type=number] { padding:3px 5px; font-size:12px; }
+  .brow { display:flex; gap:6px; flex-wrap:wrap; margin:6px 0; align-items:center; }
+  .brow input[type=color] { width:44px; height:28px; }
+
+  /* ---------- окна ---------- */
+  .modal { position:fixed; inset:0; z-index:100; background:rgba(8,10,14,.55); backdrop-filter:blur(3px); display:flex; align-items:center; justify-content:center; padding:16px; }
+  .mdl { background:var(--panel); border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow); width:min(1100px,100%); max-height:92vh; display:flex; flex-direction:column; }
+  .mdl .mh { display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border-bottom:1px solid var(--border); font-size:15px; }
+  .mdl .mb { display:grid; grid-template-columns:minmax(300px,380px) minmax(0,1fr); gap:18px; padding:16px 18px; overflow:auto; min-height:0; }
+  .mdl .pad { padding:16px 18px; overflow:auto; min-height:0; }
+  @media (max-width:800px) { .mdl .mb { grid-template-columns:1fr; } }
+  .mdl .mf { display:flex; gap:8px; align-items:center; padding:12px 18px; border-top:1px solid var(--border); }
+  .mdl .mf .sp { font-size:12px; color:var(--muted); }
+  .mdl textarea { height:190px; resize:vertical; font:12px/1.4 ui-monospace,Consolas,monospace; }
+  .mdl h3 { margin:16px 0 6px; font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.07em; }
+  .mdl .opt input[type=number], .mdl .opt input[type=text] { width:90px; padding:3px 6px; }
+  #logPreview { background:var(--input); border:1px solid var(--border); border-radius:10px; max-height:54vh; overflow:auto; padding:4px; }
+  #logSummary { font-size:12px; color:var(--muted); margin-bottom:8px; line-height:1.55; }
+  .lp { display:flex; gap:8px; align-items:baseline; padding:4px 6px; font-size:12px; border-bottom:1px solid var(--border); cursor:pointer; margin:0; color:var(--text); }
+  .lp.off { opacity:.35; }
+  .lp .t { color:var(--faint); font-family:ui-monospace,Consolas,monospace; flex:none; }
+  .lp .tp { flex:none; font-size:10px; padding:0 6px; border-radius:8px; background:var(--panel3); color:var(--muted); }
+  .lp .tp.me, .lp .tp.do { background:rgba(150,110,220,.22); color:#a98be8; } .lp .tp.say { background:var(--accent-soft); color:var(--accent); }
+  .lp .tp.other { background:rgba(220,180,60,.2); color:#c9a227; } .lp .tp.ooc { background:var(--danger-soft); color:var(--danger); }
+  .lp .tx { word-break:break-word; }
+  .lsep { margin:4px 0; padding:4px 10px; background:var(--accent-soft); border-left:3px solid var(--accent); font-size:12px; color:var(--accent); }
+  #toast { position:fixed; left:50%; bottom:26px; transform:translateX(-50%); background:var(--text); color:var(--bg); padding:10px 18px; border-radius:999px; z-index:200; display:none; max-width:80vw; font-size:13px; box-shadow:var(--shadow); }
+  .seg { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; background:var(--panel3); padding:4px; border-radius:12px; }
+  .seg label { margin:0; text-align:center; padding:9px 6px; border-radius:9px; cursor:pointer; font-size:13px; font-weight:600; color:var(--muted); }
+  .seg input { display:none; }
+  .seg input:checked + span { color:#fff; }
+  .seg label:has(input:checked) { background:var(--accent); color:#fff; }
+  kbd { background:var(--panel3); border:1px solid var(--border); border-bottom-width:2px; border-radius:5px; padding:0 6px; font:12px ui-monospace,Consolas,monospace; }
+  .helpgrid { display:grid; grid-template-columns:150px 1fr; gap:6px 14px; font-size:13px; }
+  .helpgrid b { color:var(--muted); font-weight:600; }
+
+  /* ---------- вход / регистрация ---------- */
+  #auth, #fatal { position:fixed; inset:0; z-index:300; background:var(--bg); display:grid; place-items:center; padding:16px; overflow:auto; }
+  .authcard { width:min(400px,100%); min-height:470px; background:var(--panel); border:1px solid var(--border); border-radius:18px; box-shadow:var(--shadow); padding:28px 28px 24px; }
+  .brand.big { font-size:18px; margin-bottom:4px; } .brand.big .logo { width:36px; height:36px; font-size:14px; border-radius:10px; }
+  .authcard > p.muted { margin:6px 0 18px; font-size:13px; min-height:38px; }
+  .authtabs { display:grid; grid-template-columns:1fr 1fr; gap:4px; padding:4px; background:var(--panel3); border-radius:12px; margin-bottom:16px; }
+  .authtabs .tab { border:0; border-radius:9px; padding:8px; text-align:center; }
+  .authtabs .tab.active { background:var(--accent); color:#fff; }
+  .autherr { color:var(--danger); font-size:12.5px; min-height:38px; margin:10px 0 6px; line-height:1.4; }
+  #saveState { font-size:11.5px; white-space:nowrap; } #saveState[data-s="saving"] { color:var(--muted); } #saveState[data-s="error"] { color:var(--danger); font-weight:600; }
+  #userName { max-width:120px; overflow:hidden; text-overflow:ellipsis; display:inline-block; vertical-align:bottom; }
+  @media (max-width:1180px) { :root { --wl:330px; --wr:300px; } }
+  @media (max-width:980px) {
+    html, body { overflow:auto; } #app { height:auto; grid-template-rows:56px auto; }
+    #body { grid-template-columns:1fr; } #right { grid-template-rows:252px 560px; } #left { border-right:0; max-height:70vh; }
+    #center { height:78vh; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- ================= ВЕРХНЯЯ ПАНЕЛЬ ================= -->
+<header id="topbar">
+  <div class="brand"><span class="logo">SA</span><b>Chat Studio</b></div>
+  <nav id="sitTabs" aria-label="Ситуации"></nav>
+  <button id="addSit" class="ibtn" title="Новая ситуация">＋</button>
+  <div class="sp"></div>
+  <span id="saveState" class="muted" data-s="saved" title="Состояние автосохранения в аккаунт"></span>
+  <span id="storInfo" class="muted" title="Занятое место в вашем хранилище"></span>
+  <div class="menuwrap">
+    <button data-menu>Проект ▾</button>
+    <div class="menu">
+      <button id="expAll">Сохранить проект в файл (резервная копия)</button>
+      <button id="impBtn">Открыть проект из файла…</button>
+    </div>
+  </div>
+  <input type="file" id="impFile" accept=".json,application/json" hidden>
+  <button id="copy" title="Копировать кадр как изображение">Копировать</button>
+  <button id="exBtn" class="primary">Экспорт…</button>
+  <div class="menuwrap">
+    <button data-menu id="userBtn" title="Аккаунт"><span class="ava">👤</span> <span id="userName"></span> ▾</button>
+    <div class="menu">
+      <button id="pwBtn">Сменить пароль…</button>
+      <button id="logoutBtn">Выйти</button>
+    </div>
+  </div>
+  <button id="helpBtn" class="ibtn" title="Подсказки и горячие клавиши">?</button>
+  <button id="themeBtn" class="ibtn" title="Светлая / тёмная тема"></button>
+</header>
+
+<div id="body">
+
+<!-- ================= ЛЕВАЯ ПАНЕЛЬ ================= -->
+<aside class="side" id="left">
+  <div class="tabs" role="tablist">
+    <button class="tab active" data-tab="lines">Реплики</button>
+    <button class="tab" data-tab="sit">Ситуация</button>
+    <button class="tab" data-tab="style">Стиль текста</button>
+  </div>
+
+  <!-- --- реплики --- -->
+  <section class="tabpanel active" data-panel="lines">
+    <div class="scroll">
+      <div class="field">
+        <label for="frameName">Название кадра</label>
+        <input type="text" id="frameName" placeholder="Например: Звонок в студию">
+      </div>
+      <div class="tcbar">
+        <label class="check" title="Перекрашивает реплики кадра разом; индивидуальные цвета строк при этом не учитываются"><input type="checkbox" id="tcOn"> Единый цвет</label>
+        <input type="color" id="tcVal" value="#ffffff">
+        <select id="tcFor"><option value="all">всех реплик</option><option value="say">только речи</option><option value="me">только /me и /do</option></select>
+        <span class="sp"></span>
+        <button class="sm" id="tcAll" title="Применить этот цвет ко всем кадрам ситуации">Ко всем кадрам</button>
+      </div>
+      <div class="hint" style="margin:0 0 8px">Реплики кадра: <b id="frameTitle"></b></div>
+      <div id="rows"></div>
+      <details style="margin:8px 0 12px">
+        <summary>Как формируются строки</summary>
+        <p class="hint"><b>/me</b> → «* Ник[ID] текст» · <b>/do</b> → «* текст (( Ник ))» · <b>Речь</b> → «Ник[ID] сказал: текст».
+        В поле «Вместо глагола» можно написать своё («по телефону», «по рации» → «Ник по телефону: текст»; {глагол} подставит «сказал/сказала»).
+        Поле «Другой ник» задаёт другого персонажа (пусто — основной). Рядом с текстом — цвет конкретной реплики, двойной клик сбрасывает.</p>
+      </details>
+    </div>
+    <div class="panel-foot">
+      <div class="addgrid">
+        <button data-add="me">＋ /me</button>
+        <button data-add="do">＋ /do</button>
+        <button data-add="say">＋ Речь</button>
+        <button data-add="action" title="Речь с действием перед ником">＋ Речь+действие</button>
+        <button data-add="custom">＋ Свой цвет</button>
+        <button id="impLog" class="primary" title="Вставить текст chatlog — реплики разберутся автоматически">Chatlog…</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- --- ситуация --- -->
+  <section class="tabpanel" data-panel="sit">
+    <div class="scroll">
+      <div class="card">
+        <h2>Ситуация</h2>
+        <div class="field"><label for="sitName">Название</label><input type="text" id="sitName"></div>
+        <div class="bar" style="margin-top:0">
+          <button class="sm" id="sitDup">Дублировать</button>
+          <button class="sm" id="sitExp" title="Сохранить ситуацию вместе со скриншотами в файл">Сохранить в файл</button>
+          <button class="sm x" id="sitDel">Удалить</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Основной персонаж</h2>
+        <div class="grid" style="grid-template-columns:minmax(0,1fr) 70px 92px">
+          <div><label for="nick">Ник</label><input type="text" id="nick"></div>
+          <div><label for="pid">ID</label><input type="text" id="pid"></div>
+          <div><label for="gender">Пол</label><select id="gender"><option value="m">Муж.</option><option value="f">Жен.</option></select></div>
+        </div>
+        <div class="grid" style="grid-template-columns:1fr 1fr;margin-bottom:4px">
+          <div><label for="verb">Глагол речи — муж.</label><input type="text" id="verb" placeholder="сказал"></div>
+          <div><label for="verbF">Глагол речи — жен.</label><input type="text" id="verbF" placeholder="пусто = муж. + «а»"></div>
+        </div>
+        <div class="hint">Глагол подбирается по полу говорящего (по нику строки).</div>
+      </div>
+      <div class="card">
+        <h2>Другие игроки</h2>
+        <div id="players"></div>
+        <button class="sm" id="addPlayer">＋ Добавить игрока</button>
+        <div class="hint" style="margin-top:8px">Пол игрока нужен для глагола речи, ID подставляется в ник.</div>
+      </div>
+      <div class="card">
+        <h2>Отображение ников (для всех ситуаций)</h2>
+        <label class="check"><input type="checkbox" id="showId" checked> Показывать ID: <b>Ник[ID]</b></label>
+        <label class="check"><input type="checkbox" id="doNick" checked> Ник в конце /do: <b>(( Ник ))</b></label>
+      </div>
+      <div class="card">
+        <h2>Документ со структурой</h2>
+        <div class="hint" style="margin-bottom:10px">Ситуация → кадр → участники → число реплик по типам → реплики по порядку.</div>
+        <div class="field"><label for="docFmt">Формат</label>
+          <select id="docFmt"><option value="docx">Word (.docx)</option><option value="txt">Текст (.txt)</option></select></div>
+        <div class="bar" style="margin-top:0"><button id="docCur" class="primary">Текущая ситуация</button><button id="docAll">Все ситуации</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- --- стиль текста --- -->
+  <section class="tabpanel" data-panel="style">
+    <div class="scroll">
+      <div class="card">
+        <h2>Шрифт</h2>
+        <div class="grid3" style="margin-top:0">
+          <div><label for="font">Шрифт</label>
+            <select id="font"><option>Arial</option><option>Arimo</option><option>Liberation Sans</option><option>Helvetica</option><option>Tahoma</option><option>Verdana</option></select></div>
+          <div><label for="size">Размер, px</label><input type="number" id="size" value="13" min="8" max="40"></div>
+          <div><label for="lh">Интервал, px</label><input type="number" id="lh" value="18" min="8" max="60"></div>
+        </div>
+        <label class="check"><input type="checkbox" id="bold" checked> Жирный шрифт</label>
+      </div>
+      <div class="card">
+        <h2>Цвета</h2>
+        <div class="grid3" style="margin-top:0">
+          <div><label for="cSay">Речь</label><input type="color" id="cSay" value="#ffffff"></div>
+          <div><label for="cMe">/me и /do</label><input type="color" id="cMe" value="#c2a2da"></div>
+          <div><label for="olColor">Обводка</label><input type="color" id="olColor" value="#000000"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Переносы</h2>
+        <div class="field"><label for="width">Ширина текста по умолчанию, px</label><input type="number" id="width" value="650" min="100" max="3000"></div>
+        <label class="check"><input type="checkbox" id="wrap" checked> Переносить длинные строки (как в игре)</label>
+        <label class="check"><input type="checkbox" id="wrapDots" checked> Ставить «...» в конце строки и в начале продолжения</label>
+        <div class="grid" style="grid-template-columns:minmax(0,1fr) 92px;margin:10px 0 0">
+          <div><label for="doWrap">Ник в конце /do</label>
+            <select id="doWrap"><option value="pair">Не разрывать: переносить со словами перед ником</option><option value="none">Не переносить строку /do</option></select></div>
+          <div><label for="doN">Слов с ником</label><input type="number" id="doN" value="2" min="0" max="6" title="0 — переносится только сам ник"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Обводка букв</h2>
+        <div class="grid3" style="margin-top:0">
+          <div><label for="outline">Толщина, px</label><input type="number" id="outline" value="1" min="0" max="12" step="0.5"></div>
+          <div><label for="olOp">Плотность, %</label><input type="number" id="olOp" value="100" min="0" max="100"></div>
+          <div><label for="olBlur">Свечение, px</label><input type="number" id="olBlur" value="0" min="0" max="10" step="0.5"></div>
+          <div><label for="olStyle">Стиль</label><select id="olStyle"><option value="pixel">Пиксельная (как в игре)</option><option value="vector">Контур (сглаженный)</option></select></div>
+          <div><label for="olJoin">Углы</label><select id="olJoin"><option value="round">Скруглённые</option><option value="miter">Острые</option></select></div>
+        </div>
+        <div class="hint" style="margin-top:8px">То же с ползунками — в блоке «Слои → Текст».</div>
+      </div>
+      <div class="card">
+        <h2>Тень текста</h2>
+        <label class="check" style="margin-top:0"><input type="checkbox" id="shOn"> Включить тень</label>
+        <div class="grid3" style="margin-top:0">
+          <div><label for="shColor">Цвет</label><input type="color" id="shColor" value="#000000"></div>
+          <div><label for="shDx">Сдвиг X</label><input type="number" id="shDx" value="2" min="-30" max="30"></div>
+          <div><label for="shDy">Сдвиг Y</label><input type="number" id="shDy" value="2" min="-30" max="30"></div>
+          <div><label for="shBlur">Размытие</label><input type="number" id="shBlur" value="2" min="0" max="30"></div>
+          <div><label for="shOp">Плотность, %</label><input type="number" id="shOp" value="70" min="0" max="100"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Превью</h2>
+        <label class="check" style="margin:0"><input type="checkbox" id="darkbg"> Тёмный фон под текстом (если нет скриншота)</label>
+      </div>
+    </div>
+  </section>
+</aside>
+
+<!-- ================= ЦЕНТР ================= -->
+<main id="center">
+  <div id="toolbar">
+    <button id="bgBtn" class="primary">Загрузить скриншот</button>
+    <input type="file" id="bgFile" accept="image/*" multiple hidden>
+    <button id="bgClear" data-needbg title="Убрать скриншот из кадра">Убрать фон</button>
+    <div class="tgroup" aria-label="Фон">
+      <button id="bFill" data-needbg title="Фон растягивается так, чтобы закрыть весь кадр">Заполнить</button>
+      <button id="bFit" data-needbg title="Фон целиком помещается в кадр">Вписать</button>
+      <button id="b100" data-needbg title="Фон в масштабе 100%">100%</button>
+      <button id="bFrame" data-needbg title="Кадр = размер фона (сбросить обрезку)">Кадр по фону</button>
+      <button id="rotL" data-needbg title="Повернуть фон влево">⟲</button>
+      <button id="rotR" data-needbg title="Повернуть фон вправо">⟳</button>
+    </div>
+    <span class="sp"></span>
+    <div class="tgroup" aria-label="Масштаб просмотра">
+      <button id="zOut" data-needbg title="Уменьшить">−</button>
+      <button id="zVal" data-needbg title="Вписать в окно">Вписать</button>
+      <button id="zIn" data-needbg title="Увеличить">＋</button>
+    </div>
+  </div>
+
+  <div id="stage"><div id="pv"><canvas id="view"></canvas></div></div>
+
+  <div id="dock">
+    <div class="dockrow">
+      <span class="dg">Кадр <input type="number" id="fW" min="20" data-needbg> × <input type="number" id="fH" min="20" data-needbg></span>
+      <span class="dg">Фон <input type="number" id="bgS" min="5" max="2000" data-needbg> %</span>
+      <span class="dg">Текст X <input type="number" id="tX" data-needbg> Y <input type="number" id="tY" data-needbg></span>
+      <span class="dg">Ширина <input type="number" id="tW" min="60"> px</span>
+      <span class="dg">Размер <input type="number" id="tS" min="20" max="500"> %</span>
+      <button id="tReset" class="sm" title="Вернуть ширину по умолчанию и 100%">Сбросить текст</button>
+    </div>
+    <div id="hint"></div>
+  </div>
+</main>
+
+<!-- ================= ПРАВАЯ ПАНЕЛЬ ================= -->
+<aside class="side" id="right">
+  <section id="framesPanel">
+    <div class="phead"><b>Кадры</b><span id="framesOf" class="muted ellipsis"></span><span class="sp"></span><button id="addFrame" class="sm primary">＋ Кадр</button></div>
+    <div id="tiles"></div>
+  </section>
+  <section id="layersSec">
+    <div class="phead"><b>Слои</b><span class="sp"></span>
+      <button id="addLayer" class="sm" data-needbg title="Печать, стикер, рамка — любое изображение поверх скриншота">＋ Картинка</button>
+      <button id="addFx" class="sm" data-needbg title="Ч/Б, сепия, виньетка, зерно, размытие для всего кадра или его части">＋ Эффекты</button>
+      <button id="copyAll" class="sm" data-needbg title="Скопировать фон, слои и текст этого кадра в другие кадры">Копия…</button>
+      <input type="file" id="layerFile" accept="image/*" multiple hidden>
+    </div>
+    <div id="layerList"></div>
+    <div id="layerProps"></div>
+  </section>
+</aside>
+
+</div><!-- #body -->
+</div><!-- #app -->
+
+<div id="toast"></div>
+
+<!-- ===== Вход и регистрация ===== -->
+<div id="auth" style="display:none">
+  <form id="authForm" class="authcard" autocomplete="on">
+    <div class="brand big"><span class="logo">SA</span><b>Chat Studio</b></div>
+    <p class="muted" id="authSub"></p>
+    <div class="authtabs"><button type="button" class="tab active" data-am="login">Вход</button><button type="button" class="tab" data-am="register" id="auReg">Регистрация</button></div>
+    <label for="auUser">Логин</label>
+    <input id="auUser" type="text" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="32">
+    <label for="auPass" style="margin-top:12px">Пароль</label>
+    <input id="auPass" type="password" name="password" autocomplete="current-password" maxlength="200">
+    <div id="auPass2Wrap" style="display:none"><label for="auPass2" style="margin-top:12px">Повторите пароль</label><input id="auPass2" type="password" autocomplete="new-password" maxlength="200"></div>
+    <div id="auCodeWrap" style="display:none"><label for="auCode" style="margin-top:12px">Код приглашения</label><input id="auCode" type="text" autocomplete="off" maxlength="100"></div>
+    <div id="auErr" class="autherr" role="alert"></div>
+    <button id="auGo" class="primary wide" type="submit">Войти</button>
+    <p class="hint" style="margin:14px 0 0;text-align:center">Логин: латиница, цифры, «_», «-», «.» (3–32 символа). Пароль — от 8 символов.</p>
+  </form>
+</div>
+<div id="fatal" style="display:none"><div class="authcard" style="text-align:center"><div class="brand big" style="justify-content:center"><span class="logo">SA</span><b>Chat Studio</b></div><p id="fatalMsg" class="autherr" style="min-height:0;margin:16px 0"></p><button id="fatalRetry" class="primary wide">Повторить</button></div></div>
+
+<div id="pwModal" class="modal" style="display:none">
+  <div class="mdl" style="width:min(420px,100%)">
+    <div class="mh"><b>Смена пароля</b><button id="pwClose" class="x">✕</button></div>
+    <div class="pad">
+      <label for="pwOld">Текущий пароль</label><input type="password" id="pwOld" autocomplete="current-password">
+      <label for="pwNew" style="margin-top:12px">Новый пароль (от 8 символов)</label><input type="password" id="pwNew" autocomplete="new-password">
+      <label for="pwNew2" style="margin-top:12px">Повторите новый пароль</label><input type="password" id="pwNew2" autocomplete="new-password">
+      <div id="pwErr" class="autherr"></div>
+    </div>
+    <div class="mf"><span class="sp"></span><button id="pwGo" class="primary">Сменить</button><button id="pwCancel">Отмена</button></div>
+  </div>
+</div>
+
+<!-- ===== Экспорт ===== -->
+<div id="exModal" class="modal" style="display:none">
+  <div class="mdl" style="width:min(540px,100%)">
+    <div class="mh"><b>Экспорт</b><button id="exClose" class="x">✕</button></div>
+    <div class="pad">
+      <label>Формат</label>
+      <div class="seg">
+        <label><input type="radio" name="exFmt" value="png" checked><span>PNG</span></label>
+        <label><input type="radio" name="exFmt" value="jpg"><span>JPEG</span></label>
+        <label><input type="radio" name="exFmt" value="psd"><span>PSD</span></label>
+      </div>
+      <p class="hint" id="exFmtHint" style="min-height:54px;margin:10px 0 4px"></p>
+
+      <h3 style="margin-top:12px">Что скачать</h3>
+      <label class="opt"><input type="radio" name="exScope" value="cur" checked> Текущий кадр</label>
+      <label class="opt"><input type="radio" name="exScope" value="all"> Все кадры ситуации одним ZIP-архивом</label>
+
+      <h3>Параметры</h3>
+      <div class="srow" style="grid-template-columns:140px minmax(0,1fr) 56px"><label>Качество JPEG</label><input type="range" id="exQ" min="50" max="100" value="92"><input type="number" id="exQn" min="50" max="100" value="92"></div>
+      <div class="srow" style="grid-template-columns:140px 90px 1fr"><label>Расширение JPEG</label><select id="exExt"><option value="jpg">.jpg</option><option value="jpeg">.jpeg</option></select><span></span></div>
+      <div class="srow" style="grid-template-columns:140px 60px 1fr"><label>Фон под прозрачным</label><input type="color" id="exBg" value="#000000"><span class="hint">для JPEG и общего вида PSD</span></div>
+      <label class="opt"><input type="checkbox" id="exText"> Только текст (прозрачный PNG, без скриншота)</label>
+    </div>
+    <div class="mf"><span class="sp" id="exInfo"></span><button id="exGo" class="primary">Скачать</button><button id="exCancel">Отмена</button></div>
+  </div>
+</div>
+
+<!-- ===== Подсказки ===== -->
+<div id="helpModal" class="modal" style="display:none">
+  <div class="mdl" style="width:min(640px,100%)">
+    <div class="mh"><b>Подсказки</b><button id="helpClose" class="x">✕</button></div>
+    <div class="pad">
+      <div class="helpgrid">
+        <b>Скриншот</b><span>Кнопка «Загрузить скриншот», перетаскивание файла в окно или <kbd>Ctrl</kbd>+<kbd>V</kbd>. Несколько файлов — несколько кадров.</span>
+        <b>Текст на кадре</b><span>Тащите мышью. Синие квадраты на рамке: правый — ширина, нижний — высота, угловой — масштаб.</span>
+        <b>Фон</b><span>Тащите — сдвиг, колесо мыши — масштаб. Белая рамка — обрезка кадра (можно и расширять).</span>
+        <b>Слой-картинка</b><span>Тащите — перемещение, угловые квадраты — размер, кружок сверху — поворот (<kbd>Shift</kbd> — шаг 15°).</span>
+        <b>Выбор слоя</b><span>Клик по картинке в кадре или в списке слоёв. Прозрачные места «прозрачны» для клика.</span>
+        <b>Клавиши</b><span><kbd>Delete</kbd> — удалить слой · стрелки — сдвиг на 1 px (<kbd>Shift</kbd> — на 10) · <kbd>Esc</kbd> — закрыть окно</span>
+        <b>Ползунки</b><span>Двойной клик по названию параметра сбрасывает его.</span>
+        <b>Хранение</b><span>Всё автоматически сохраняется в вашем аккаунте на сервере и доступно с любого устройства. Резервную копию в файл можно сделать через «Проект».</span>
+      </div>
+    </div>
+    <div class="mf"><span class="sp"></span><button id="helpOk" class="primary">Понятно</button></div>
+  </div>
+</div>
+
+<div id="cpModal" class="modal" style="display:none">
+  <div class="mdl" style="width:min(580px,100%)">
+    <div class="mh"><b id="cpTitle">Копирование</b><button id="cpClose" class="x">✕</button></div>
+    <div style="padding:14px;overflow:auto;min-height:0">
+      <div id="cpOpts"></div>
+      <h3>Куда скопировать</h3>
+      <div id="cpTree"></div>
+    </div>
+    <div class="mf"><span class="sp" id="cpInfo"></span><button id="cpGo" class="primary">Копировать</button><button id="cpCancel">Отмена</button></div>
+  </div>
+</div>
+<div id="impModal" class="modal" style="display:none">
+  <div class="mdl">
+    <div class="mh"><b>Импорт chatlog</b><button id="logClose" class="x">✕</button></div>
+    <div class="mb">
+      <div>
+        <label>Вставьте текст из chatlog (или загрузите файл)</label>
+        <textarea id="logText" placeholder="[17:24:50] * Nick_Name делает что-то&#10;[17:26:16] Nick_Name сказал: Добрый вечер."></textarea>
+        <div class="bar" style="margin-top:6px"><button id="logFileBtn" class="sm">Загрузить файл…</button><input type="file" id="logFileIn" accept=".txt,.log,text/plain" hidden>
+          <button id="logClear" class="sm">Очистить</button></div>
+
+        <h3>Что импортировать</h3>
+        <label class="opt"><input type="checkbox" id="lgSay" checked> Речь (в т.ч. «…, Ник сказал: …»)</label>
+        <label class="opt"><input type="checkbox" id="lgMe" checked> /me (* Ник действие)</label>
+        <label class="opt"><input type="checkbox" id="lgDo" checked> /do (* описание (( Ник )))</label>
+        <label class="opt"><input type="checkbox" id="lgOther" checked> Прочие строки с ником (звонки и т.п.)</label>
+        <label class="opt"><input type="checkbox" id="lgOoc"> OOC: (( … )), «!» и шёпот в (( ))</label>
+
+        <h3>Основной персонаж ситуации</h3>
+        <select id="lgMain"></select>
+
+        <h3>Куда поместить</h3>
+        <label class="opt"><input type="radio" name="lgMode" value="shots" checked> Разбить на кадры по строкам «Скриншот сохранен»</label>
+        <label class="opt" style="margin-left:22px" id="lgShotOpts">Строк в кадре <input type="number" id="lgN" value="0" min="0" max="50" title="0 — только новые строки с момента прошлого скриншота"> <span style="color:var(--muted)">(0 = только новые)</span></label>
+        <label class="opt" style="margin-left:22px" id="lgSkipRow"><input type="checkbox" id="lgSkip" checked> Пропускать кадры без реплик</label>
+        <label class="opt"><input type="radio" name="lgMode" value="one"> Одним новым кадром</label>
+        <label class="opt"><input type="radio" name="lgMode" value="cur"> В текущий кадр:
+          <select id="lgCur" style="width:auto"><option value="replace">заменить строки</option><option value="append">добавить в конец</option></select></label>
+
+        <h3>Диапазон времени (необязательно)</h3>
+        <div class="opt">с <input type="text" id="lgFrom" placeholder="17:24:50"> по <input type="text" id="lgTo" placeholder="17:40:00"></div>
+      </div>
+      <div>
+        <div id="logSummary">Вставьте текст слева — реплики разберутся сами.</div>
+        <div class="bar" style="margin:0 0 6px"><button class="sm" id="lgAll">Отметить всё</button><button class="sm" id="lgNone">Снять отметки</button></div>
+        <div id="logPreview"></div>
+      </div>
+    </div>
+    <div class="mf"><span class="sp" id="logInfo"></span><button id="logGo" class="primary">Импортировать</button><button id="logCancel">Отмена</button></div>
+  </div>
+</div>
+<datalist id="nicks"></datalist>
+<datalist id="sfxList"></datalist>
+
+<script>
+const $ = id => document.getElementById(id);
+const rowsEl = $('rows');
+const ctrl = ['wrapDots','doWrap','doN','olOp','olBlur','olStyle','olJoin','shOn','shColor','shDx','shDy','shBlur','shOp','olColor','cSay','cMe','font','size','lh','outline','width','bold','wrap','darkbg','showId','doNick'];  // общие настройки
+const LABELS = { me:'/me', do:'/do', say:'Речь', action:'Речь + действие', custom:'Свой цвет' };
+const PH = { me:'делает себе кофе…', do:'Кофемашина закончила работу…', say:'Ч-чёрт… Старая хренотень!', action:'Что говорит персонаж', custom:'Любой текст' };
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+const uid = () => crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
+const stripId = s => s.replace(/\s*\[[^\]]*\]\s*$/, '');
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+/* ================= ХРАНИЛИЩЕ (локальная IndexedDB — только для переноса данных в аккаунт) ================= */
+let _ldb;
+const openLocalDB = () => _ldb || (_ldb = new Promise((res, rej) => {
+  const r = indexedDB.open('sampchat', 2);
+  r.onupgradeneeded = () => { const d = r.result; for (const s of ['kv', 'img']) if (!d.objectStoreNames.contains(s)) d.createObjectStore(s); };
+  r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+}));
+const localIdb = (store, mode, fn) => openLocalDB().then(db => new Promise((res, rej) => {
+  const t = db.transaction(store, mode), req = fn(t.objectStore(store));
+  t.oncomplete = () => res(req && req.result); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+}));
+const LocalDB = {
+  get: (s, k) => localIdb(s, 'readonly', o => o.get(k)),
+  set: (s, k, v) => localIdb(s, 'readwrite', o => o.put(v, k)),
+  del: (s, k) => localIdb(s, 'readwrite', o => o.delete(k)),
+  keys: s => localIdb(s, 'readonly', o => o.getAllKeys()),
+};
+const recentImgs = new Map();
+async function putImage(blob) { const id = uid(); await DB.set('img', id, blob); recentImgs.set(id, Date.now()); return id; }
+function dataURLtoBlob(u) {
+  const [h, b] = u.split(','), mime = /:(.*?);/.exec(h)?.[1] || 'image/png', bin = atob(b), a = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
+  return new Blob([a], { type: mime });
+}
+const readFile = file => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); });
+
+/* ================= МОДЕЛЬ ================= */
+let sits = [], curSit = null;      // ситуации; текущая ситуация
+let frames = [], active = 0;       // кадры текущей ситуации (тот же массив, что в curSit.frames) и активный кадр
+let building = false, busy = false;
+let curText = null;                // canvas с текстом активного кадра
+const F = () => frames[active];
+
+const defAdj = () => ({ bri:0, con:0, sat:0, hue:0, temp:0, inv:false, bw:0, sepia:0, tint:0, tintC:'#b0803c', fade:0, vig:0, vsize:50, grain:0, gsize:1, blur:0, sharp:0 });
+const defStroke = () => ({ w:0, color:'#ffffff' });
+const defShadow = () => ({ on:false, color:'#000000', op:60, blur:8, dx:4, dy:4 });
+const defKey = () => ({ on:false, color:'#ffffff', tol:15, soft:10, mode:'all' });
+const TEXT_LAYER = () => ({ kind:'text', id:'text', visible:true });
+function normFrame(f) {                       // дополнить кадр полями слоёв (в т.ч. из старых проектов)
+  let t = false;
+  f.layers = (Array.isArray(f.layers) ? f.layers : []).filter(L => {
+    if (L.kind === 'text') { if (t) return false; t = true; L.id = 'text'; L.visible = L.visible !== false; return true; }
+    return L.kind === 'img' || L.kind === 'fx';
+  });
+  if (!t) f.layers.push(TEXT_LAYER());
+  f.layers.forEach(L => {
+    if (L.kind === 'text') return;
+    L.id = L.id || uid(); L.visible = L.visible !== false; L.op = L.op ?? 100; L.adj = { ...defAdj(), ...L.adj };
+    if (L.kind === 'fx') { L.name = L.name || 'Эффекты'; L.border = { w:0, color:'#000000', ...L.border }; L.region = { mode:'all', x:0, y:0, w:0, h:0, feather:24, inv:false, ...L.region }; return; }
+    L.name = L.name || 'Изображение'; L.flip = !!L.flip; L.rot = L.rot || 0; L.s = L.s || 1;
+    L.blend = L.blend || 'source-over'; L.key = { ...defKey(), ...L.key };
+    L.stroke = { ...defStroke(), ...L.stroke }; L.shadow = { ...defShadow(), ...L.shadow };
+  });
+  f.bgAdj = { ...defAdj(), ...f.bgAdj };
+  return f;
+}
+const layerMeta = L => L.kind === 'text' ? { kind:'text', id:'text', visible:L.visible }
+  : L.kind === 'fx' ? { kind:'fx', id:L.id, name:L.name, visible:L.visible, op:L.op, adj:L.adj, border:L.border, region:L.region }
+  : { kind:'img', id:L.id, name:L.name, imgId:L.imgId, iw:L.iw, ih:L.ih, cx:L.cx, cy:L.cy, s:L.s, rot:L.rot, flip:L.flip, visible:L.visible, op:L.op, blend:L.blend, adj:L.adj, key:L.key, stroke:L.stroke, shadow:L.shadow };
+function newFrame(rows = [], sit = curSit) {
+  sit.counter = (sit.counter || 0) + 1;
+  return normFrame({ name:'Кадр ' + sit.counter, rows, hasBg:false, imgId:'', bgImg:null, layers:[], bgAdj:null,
+           bx:0, by:0, bs:1,          // положение и масштаб фона (мировые координаты)
+           fx:0, fy:0, W:0, H:0,      // рамка кадра (обрезка)
+           tx:10, ty:10,              // положение текста в кадре
+           tw:null, ts:1, shot:'', tcolor:'', tfor:'all' });          // ширина переноса текста (null = по умолчанию) и масштаб текста
+}
+function makeSit(name, from) {
+  const s = { id:uid(), name, nick: from?.nick ?? 'Max_Ritter', pid: from?.pid ?? '25', gender: from?.gender ?? 'm', verb: from?.verb ?? 'сказал', verbF: from?.verbF ?? '',
+             players: JSON.parse(JSON.stringify(from?.players ?? [])), frames:[], active:0, counter:0 };
+  s.frames.push(newFrame([{ type:'me', text:'', act:'', color:'#ffff00', nick:'' }], s));
+  return s;
+}
+const frameMeta = f => ({ name:f.name, rows:f.rows, hasBg:f.hasBg, imgId:f.imgId, bx:f.bx, by:f.by, bs:f.bs, fx:f.fx, fy:f.fy, W:f.W, H:f.H, tx:f.tx, ty:f.ty, tw:f.tw, ts:f.ts, shot:f.shot || '', tcolor:f.tcolor || '', tfor:f.tfor || 'all', bgAdj:f.bgAdj, layers:f.layers.map(layerMeta) });
+const normSit = s => { s.gender = s.gender || 'm'; s.verbF = s.verbF || ''; s.players = Array.isArray(s.players) ? s.players : []; return s; };
+const sitMeta = s => ({ id:s.id, name:s.name, nick:s.nick, pid:s.pid, gender:s.gender, verb:s.verb, verbF:s.verbF, players:s.players, active:s.active, counter:s.counter, frames:s.frames.map(frameMeta) });
+const readSettings = () => { const o = {}; ctrl.forEach(k => { const e = $(k); o[k] = e.type === 'checkbox' ? e.checked : e.value; }); return o; };
+const applySettings = o => Object.entries(o || {}).forEach(([k, v]) => { const e = $(k); if (e && ctrl.includes(k)) e.type === 'checkbox' ? e.checked = v : e.value = v; });
+
+function flushState() {                 // перенести состояние экранa в модель
+  if (!curSit) return;
+  if (frames[active] && !building) frames[active].rows = getRows();
+  curSit.active = active;
+  curSit.nick = $('nick').value; curSit.pid = $('pid').value; curSit.verb = $('verb').value; curSit.verbF = $('verbF').value; curSit.gender = $('gender').value; curSit.name = $('sitName').value;
+}
+function loadSitInputs() {
+  $('sitName').value = curSit.name; $('nick').value = curSit.nick; $('pid').value = curSit.pid; $('verb').value = curSit.verb;
+  $('verbF').value = curSit.verbF || ''; $('gender').value = curSit.gender || 'm'; renderPlayers();
+}
+
+/* ---- картинки: декодируем только у текущей ситуации ---- */
+async function ensureImages(sit) {
+  const load = async id => { const blob = id && await DB.get('img', id); if (!blob) throw 0; return createImageBitmap(blob); };
+  await Promise.all(sit.frames.flatMap(f => [
+    (async () => {
+      if (!f.hasBg || f.bgImg) return;
+      try { f.bgImg = await load(f.imgId); } catch { f.hasBg = false; f.imgId = ''; f.bgImg = null; }
+    })(),
+    ...f.layers.filter(L => L.kind === 'img' && !L.img).map(async L => {
+      try { L.img = await load(L.imgId); L.iw = L.img.width; L.ih = L.img.height; } catch { L.missing = true; }
+    }),
+  ]));
+  sit.frames.forEach(f => { f.layers = f.layers.filter(L => !L.missing); });
+}
+function releaseImages(sit) {
+  sit.frames.forEach(f => {
+    try { f.bgImg?.close?.(); } catch {} f.bgImg = null; f._bgProc = null; f._bgSig = '';
+    f.layers.forEach(L => { if (L.kind === 'img') { try { L.img?.close?.(); } catch {} L.img = null; L._proc = null; L._sig = ''; } });
+  });
+}
+
+/* ================= СИТУАЦИИ (вкладки сверху) ================= */
+async function switchSit(i) {
+  if (busy) return; busy = true;
+  try {
+    flushState();
+    const next = sits[i], prev = curSit;
+    await ensureImages(next);
+    if (prev && prev !== next) releaseImages(prev);
+    curSit = next; frames = next.frames; active = clamp(next.active || 0, 0, frames.length - 1);
+    loadSitInputs(); renderSitTabs(); renderTiles(); switchTo(active, true);
+  } finally { busy = false; }
+}
+function renderSitTabs() {
+  const box = $('sitTabs'); box.innerHTML = '';
+  sits.forEach((s, i) => {
+    const d = document.createElement('div'); d.className = 'stab' + (s === curSit ? ' active' : '');
+    d.innerHTML = `<span class="nm">${esc(s.name || 'Без названия')}</span><span class="cnt" title="Кадров">${s.frames.length}</span><button title="Удалить ситуацию">✕</button>`;
+    d.onclick = () => { if (s !== curSit) switchSit(i); };
+    d.querySelector('button').onclick = e => { e.stopPropagation(); delSit(i); };
+    box.appendChild(d);
+  });
+  $('framesOf').textContent = curSit ? curSit.name : '';
+  box.querySelector('.active')?.scrollIntoView({ block:'nearest', inline:'nearest' });
+}
+async function addSit() {
+  flushState();
+  sits.push(makeSit('Ситуация ' + (sits.length + 1), curSit));
+  await switchSit(sits.length - 1); save(true);
+}
+async function dupSit() {
+  flushState();
+  const src = curSit, i = sits.indexOf(src);
+  const n = { ...sitMeta(src), id:uid(), name:src.name + ' (копия)' };
+  n.players = JSON.parse(JSON.stringify(src.players || []));
+  n.frames = n.frames.map(f => normFrame({ ...JSON.parse(JSON.stringify(f)), bgImg:null }));
+  sits.splice(i + 1, 0, n); await switchSit(i + 1); save(true);
+}
+async function delSit(i) {
+  if (sits.length === 1) { alert('Нельзя удалить единственную ситуацию.'); return; }
+  const s = sits[i];
+  if (!confirm(`Удалить ситуацию «${s.name}» вместе со всеми её кадрами (${s.frames.length})?`)) return;
+  flushState();
+  sits.splice(i, 1);
+  if (s === curSit) { releaseImages(s); curSit = null; await switchSit(Math.min(i, sits.length - 1)); }
+  else renderSitTabs();
+  save(true);
+}
+$('addSit').onclick = addSit;
+$('sitDup').onclick = dupSit;
+$('sitDel').onclick = () => delSit(sits.indexOf(curSit));
+$('sitName').oninput = () => { curSit.name = $('sitName').value; renderSitTabs(); save(); };
+['nick', 'pid', 'verb', 'verbF', 'gender'].forEach(k => { $(k).oninput = $(k).onchange = () => { curSit[k] = $(k).value; render(); }; });
+$('frameName').oninput = () => {
+  F().name = $('frameName').value;
+  const nm = tilesEl.children[active]?.querySelector('.nm'); if (nm) nm.textContent = F().name || 'Без названия';
+  $('frameTitle').textContent = F().name; save();
+};
+
+/* ---- игроки ситуации (для определения пола) ---- */
+function renderPlayers() {
+  const box = $('players'); box.innerHTML = '';
+  curSit.players.forEach((p, i) => {
+    const d = document.createElement('div'); d.className = 'prow';
+    d.innerHTML = `<input type="text" class="pn" placeholder="Ник" value="${esc(p.nick)}"><input type="text" class="pi" placeholder="ID" value="${esc(p.pid || '')}">
+      <select class="pg"><option value="m">Муж.</option><option value="f">Жен.</option></select><button class="x" title="Убрать игрока">✕</button>`;
+    const pn = d.querySelector('.pn'), pi = d.querySelector('.pi'), pg = d.querySelector('.pg');
+    pg.value = p.gender || 'm';
+    const upd = () => { p.nick = pn.value; p.pid = pi.value; p.gender = pg.value; render(); };
+    pn.oninput = pi.oninput = upd; pg.onchange = upd;
+    d.querySelector('.x').onclick = () => { curSit.players.splice(i, 1); renderPlayers(); render(); };
+    box.appendChild(d);
+  });
+}
+$('addPlayer').onclick = () => { curSit.players.push({ nick:'', pid:'', gender:'m' }); renderPlayers(); box_focus(); };
+const box_focus = () => $('players').lastElementChild?.querySelector('.pn').focus();
+function ensurePlayer(text) {                // ник, введённый в строке, попадает в список игроков (пол по умолчанию — муж.)
+  const o = (text || '').trim(), nick = stripId(o);
+  if (!nick || findPlayer(curSit, nick)) return;
+  curSit.players.push({ nick, pid: /\[([^\]]*)\]\s*$/.exec(o)?.[1] || '', gender:'m' });
+  renderPlayers(); render();
+}
+
+/* ================= СТРОКИ ================= */
+const mainWho = (sit = curSit) => {
+  const n = sit.nick, id = sit.pid;
+  return $('showId').checked && id !== '' ? `${n}[${id}]` : n;
+};
+const findPlayer = (sit, nick) => {          // персонаж ситуации по нику: основной или из списка игроков
+  const n = (nick || '').trim().toLowerCase(); if (!n) return null;
+  if ((sit.nick || '').trim().toLowerCase() === n) return { nick:sit.nick, pid:sit.pid, gender:sit.gender || 'm' };
+  return (sit.players || []).find(p => (p.nick || '').trim().toLowerCase() === n) || null;
+};
+const verbFor = (sit, gender) => gender === 'f' ? ((sit.verbF || '').trim() || (sit.verb || 'сказал') + 'а') : (sit.verb || 'сказал');
+const nickPh = () => `Другой ник — пусто = ${mainWho()}`;
+const nickPhDo = () => `Ник в (( )) — пусто = ${curSit.nick}`;
+
+function addRow(type='me', text='', extra='', color='#ffff00', nick='', sfx='', scol='') {
+  const r = document.createElement('div');
+  r.className = 'row'; r.dataset.type = type;
+  r.innerHTML = `
+    <div><select class="type">${Object.entries(LABELS).map(([k,v])=>`<option value="${k}"${k===type?' selected':''}>${v}</option>`).join('')}</select></div>
+    <div class="fields"></div>
+    <div style="display:flex;gap:4px">
+      <button title="Вверх" class="up">↑</button><button title="Вниз" class="dn">↓</button><button class="x" title="Удалить">✕</button>
+    </div>`;
+  rowsEl.appendChild(r);
+  buildFields(r, type, text, extra, color, nick, sfx, scol);
+  r.querySelector('.type').onchange = e => {
+    const t = e.target.value; r.dataset.type = t;
+    const sc = r.querySelector('.sc');
+    buildFields(r, t, r.querySelector('.txt').value, r.querySelector('.act')?.value || '', color, r.querySelector('.nk')?.value || '',
+      r.querySelector('.sx')?.value || '', sc?.dataset.set ? sc.value : '');
+    render();
+  };
+  r.querySelector('.x').onclick = () => { r.remove(); render(); };
+  r.querySelector('.up').onclick = () => { if (r.previousElementSibling) rowsEl.insertBefore(r, r.previousElementSibling); render(); };
+  r.querySelector('.dn').onclick = () => { if (r.nextElementSibling) rowsEl.insertBefore(r.nextElementSibling, r); render(); };
+  render();
+}
+function buildFields(r, type, text, extra, color, nick='', sfx='', scol='') {
+  const f = r.querySelector('.fields');
+  let html = '';
+  if (['me', 'say', 'action', 'do'].includes(type))
+    html += `<input type="text" class="nk" list="nicks" placeholder="${esc(type === 'do' ? nickPhDo() : nickPh())}" value="${esc(nick)}" style="margin-bottom:4px">`;
+  if (type === 'say' || type === 'action')
+    html += `<input type="text" class="sx" list="sfxList" placeholder="Вместо глагола: по телефону, по рации… (пусто — «${esc(verbFor(curSit, 'm'))}»)" value="${esc(sfx)}" style="margin-bottom:4px">`;
+  if (type === 'action') html += `<input type="text" class="act" placeholder="Действие: Направившись к телефону" value="${esc(extra)}" style="margin-bottom:4px">`;
+  html += `<div style="display:flex;gap:4px"><input type="text" class="txt" placeholder="${esc(PH[type])}" value="${esc(text)}">`;
+  if (type === 'custom') html += `<input type="color" class="col" value="${color}" style="width:44px">`;
+  if (type === 'say' || type === 'action')
+    html += `<input type="color" class="sc" value="${scol || $('cSay').value}" ${scol ? 'data-set="1"' : ''} style="width:44px" title="Цвет этой реплики (по умолчанию — цвет речи). Двойной клик — сбросить">`;
+  html += `</div>`;
+  f.innerHTML = html;
+  f.querySelectorAll('input').forEach(i => i.oninput = render);
+  f.querySelector('.nk')?.addEventListener('change', e => ensurePlayer(e.target.value));
+  const sc = f.querySelector('.sc');
+  if (sc) {
+    sc.oninput = () => { sc.dataset.set = '1'; render(); };
+    sc.addEventListener('dblclick', () => { delete sc.dataset.set; sc.value = $('cSay').value; render(); });
+  }
+}
+document.querySelectorAll('[data-add]').forEach(b => b.onclick = () => addRow(b.dataset.add));
+
+function getRows() {
+  return [...rowsEl.children].map(r => ({
+    type: r.dataset.type,
+    text: r.querySelector('.txt').value,
+    act: r.querySelector('.act')?.value || '',
+    color: r.querySelector('.col')?.value || '#ffff00',
+    nick: r.querySelector('.nk')?.value || '',
+    sfx: r.querySelector('.sx')?.value || '',
+    scol: r.querySelector('.sc')?.dataset.set ? r.querySelector('.sc').value : '',
+  }));
+}
+function buildRowsUI() {
+  building = true; rowsEl.innerHTML = '';
+  F().rows.forEach(r => addRow(r.type, r.text, r.act, r.color, r.nick, r.sfx || '', r.scol || ''));
+  building = false;
+}
+
+/* ================= ТЕКСТ → CANVAS ================= */
+function how(r, verb) {                          // «сказал» или свой текст после ника («по телефону», «по рации»…)
+  const x = (r.sfx || '').trim().replace(/\{(глагол|verb)\}/gi, verb).replace(/:\s*$/, '').trim();
+  return x || verb;
+}
+function buildLines(rows, sit = curSit) {
+  const showId = $('showId').checked, doNick = $('doNick').checked;
+  return rows.filter(r => r.text.trim() || r.act.trim()).map(r => {
+    const o = r.nick.trim(), nickOnly = o ? stripId(o) : sit.nick, pl = findPlayer(sit, nickOnly);
+    const who = o ? (showId ? (/\[[^\]]*\]\s*$/.test(o) || !pl?.pid ? o : `${o}[${pl.pid}]`) : stripId(o)) : mainWho(sit);
+    const verb = verbFor(sit, pl?.gender || 'm');
+    const info = { type:r.type, author:nickOnly, pid:/\[([^\]]*)\]\s*$/.exec(o)?.[1] || pl?.pid || '' };
+    switch (r.type) {
+      case 'me': return { ...info, t:`* ${who} ${r.text}`, c:$('cMe').value };
+      case 'do': { const keep = doNick && nickOnly ? `(( ${nickOnly} ))` : ''; return { ...info, t:`* ${r.text}${keep ? ' ' + keep : ''}`, c:$('cMe').value, keep }; }
+      case 'say': return { ...info, t:`${who} ${how(r, verb)}: ${r.text}`, c:r.scol || $('cSay').value };
+      case 'action': return { ...info, t:`${r.act ? r.act.replace(/[,\s]+$/,'') + ', ' : ''}${who} ${how(r, verb)}: ${r.text}`, c:r.scol || $('cSay').value };
+      default: return { type:'custom', author:'', pid:'', t:r.text, c:r.color };
+    }
+  });
+}
+const fontStr = px => `${$('bold').checked?'bold ':''}${px}px "${$('font').value}", Arial, sans-serif`;
+function wrapText(ctx, text, maxW, keep, n, dots) {
+  let tokens;
+  if (keep && text.endsWith(keep)) {              // «(( Ник ))» в конце /do не разрывается и уходит на новую строку вместе с n словами перед ним
+    const words = text.slice(0, -keep.length).trim().split(' ').filter(Boolean);
+    const mk = k => [...words.slice(0, words.length - k), [...words.slice(words.length - k), keep].join(' ')];
+    let k = Math.min(Math.max(0, n | 0), words.length); tokens = mk(k);
+    while (k > 0 && ctx.measureText(tokens[tokens.length - 1]).width > maxW) tokens = mk(--k);   // связка не помещается в строку — берём меньше слов
+  } else tokens = text.split(' ');
+  const out = []; let cur = '', pre = '';
+  tokens.forEach((w, i) => {
+    const test = cur ? cur + ' ' + w : w, last = i === tokens.length - 1;
+    // при переносе в конце строки и в начале следующей ставится «...» — место под него резервируем заранее
+    const width = ctx.measureText(pre + test + (dots && !last ? '...' : '')).width;
+    if (cur && width > maxW) { out.push(pre + cur + (dots ? '...' : '')); pre = dots ? '...' : ''; cur = w; } else cur = test;
+  });
+  out.push(pre + cur); return out;
+}
+const rgba = (hex, a) => { const [r, g, b] = hexRGB(hex); return `rgba(${r},${g},${b},${a})`; };
+function makeTextCanvas(rows, f) {
+  const ts = f?.ts || 1;
+  const px = (+$('size').value || 13) * ts, lh = (+$('lh').value || 18) * ts;
+  const vec = $('olStyle').value === 'vector', olRaw = Math.max(0, +$('outline').value || 0) * ts;
+  const olN = olRaw > 0 ? (vec ? olRaw : Math.max(1, Math.round(olRaw))) : 0;           // толщина обводки, px
+  const olBlur = Math.max(0, +$('olBlur').value || 0) * ts, olOp = clamp(isNaN(+$('olOp').value) ? 100 : +$('olOp').value, 0, 100) / 100;
+  const olCol = $('olColor').value || '#000000';
+  const shOn = $('shOn').checked, shDx = (+$('shDx').value || 0) * ts, shDy = (+$('shDy').value || 0) * ts, shBlur = Math.max(0, +$('shBlur').value || 0) * ts;
+  const shOp = clamp(isNaN(+$('shOp').value) ? 70 : +$('shOp').value, 0, 100) / 100;
+  const me = shOn ? Math.ceil(Math.max(Math.abs(shDx), Math.abs(shDy)) + shBlur * 2) : 0;   // запас под тень
+  const pad = Math.ceil(olN) + Math.ceil(olBlur * 2) + 2, edge = pad + me;
+  const W = f?.tw || +$('width').value || 650;
+  const meas = document.createElement('canvas').getContext('2d'); meas.font = fontStr(px);
+  const doN = +$('doN').value || 0, doNone = $('doWrap').value === 'none';
+  const visual = [];
+  const tcol = f?.tcolor, tfor = f?.tfor || 'all';
+  for (const l of buildLines(rows)) {
+    const parts = !$('wrap').checked || (l.keep && doNone) ? [l.t] : wrapText(meas, l.t, W - edge * 2, l.keep, doN, $('wrapDots').checked);
+    const recol = tcol && (tfor === 'all' || (tfor === 'say' && (l.type === 'say' || l.type === 'action')) || (tfor === 'me' && (l.type === 'me' || l.type === 'do')));
+    parts.forEach(p => visual.push({ t:p, c:recol ? tcol : l.c }));
+  }
+  makeTextCanvas._lines = visual.map(v => v.t); makeTextCanvas._cols = visual.map(v => v.c);
+  let maxW = 0; for (const v of visual) maxW = Math.max(maxW, meas.measureText(v.t).width);
+  const cw = Math.max(10, Math.ceil(maxW + edge * 2)), chh = Math.max(Math.ceil(visual.length * lh + pad + 2 * me), 10);
+  const mk = () => {
+    const k = document.createElement('canvas'); k.width = cw; k.height = chh;
+    const x = k.getContext('2d', { willReadFrequently:true });
+    x.font = fontStr(px); x.textBaseline = 'middle'; x.lineJoin = $('olJoin').value || 'round'; x.miterLimit = 4; return [k, x];
+  };
+  const [oc, ox] = mk(), [fc, fx] = mk(), [c, cx] = mk();
+  visual.forEach((v, i) => {
+    const y = pad / 2 + me + i * lh + lh / 2 + 1, x = edge;
+    if (olN > 0) {
+      if (vec) { ox.strokeStyle = olCol; ox.lineWidth = olN * 2; ox.strokeText(v.t, x, y); }
+      else { ox.fillStyle = olCol; for (let dx = -olN; dx <= olN; dx++) for (let dy = -olN; dy <= olN; dy++) if (dx || dy) ox.fillText(v.t, x + dx, y + dy); }
+    }
+    fx.fillStyle = v.c; fx.fillText(v.t, x, y);
+  });
+  if (shOn && shOp > 0) {                          // тень всего текста (обводка + заливка) — рисуем только саму тень, сам силуэт уводим за край холста
+    const [sil, sx] = mk(); if (olN > 0) sx.drawImage(oc, 0, 0); sx.drawImage(fc, 0, 0);
+    const OFF = cw + 100;
+    cx.save(); cx.shadowColor = rgba($('shColor').value, shOp); cx.shadowBlur = shBlur; cx.shadowOffsetX = shDx + OFF; cx.shadowOffsetY = shDy;
+    cx.drawImage(sil, -OFF, 0); cx.restore();
+  }
+  if (olN > 0) {
+    cx.save(); cx.globalAlpha = olOp;
+    if (olBlur > 0) { cx.shadowColor = olCol; cx.shadowBlur = olBlur * 2; }
+    cx.drawImage(oc, 0, 0); cx.restore();
+  }
+  cx.drawImage(fc, 0, 0);
+  return c;
+}
+
+/* ================= КОМПОЗИЦИЯ / ЭКСПОРТ ================= */
+function composeFrame(ctx, f, k, t) {
+  ctx.save(); ctx.setTransform(k, 0, 0, k, -f.fx * k, -f.fy * k);
+  paintWorld(ctx, f, t); ctx.restore();
+}
+function paintWorld(c, f, t, o = {}) {      // рисует фон, слои и текст в мировых координатах (трансформ уже задан)
+  const a = o.alpha ?? 1;
+  if (f.hasBg && f.bgImg) {
+    c.save(); c.globalAlpha = a; c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
+    c.translate(f.bx, f.by); c.scale(f.bs, f.bs); c.drawImage(bgSource(f), 0, 0); c.restore();
+  }
+  for (const L of f.layers) {
+    if (!L.visible) continue;
+    if (L.kind === 'text') { if (o.text !== false) { c.save(); c.globalAlpha = 1; c.drawImage(t, f.fx + f.tx, f.fy + f.ty); c.restore(); } continue; }
+    if (L.kind === 'fx') { if (o.fx !== false) applyFxLayer(c, f, L); continue; }
+    if (!L.img) continue;
+    const cv = layerCanvas(L), pd = cv.pad || 0;
+    c.save(); c.globalAlpha = a * (L.op / 100); c.globalCompositeOperation = L.blend || 'source-over';
+    c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
+    c.translate(L.cx, L.cy); c.rotate(L.rot * Math.PI / 180); c.scale(L.flip ? -L.s : L.s, L.s);
+    c.drawImage(cv, -L.iw / 2 - pd, -L.ih / 2 - pd); c.restore();
+  }
+}
+const selFx = f => { const L = f.layers.find(l => l.id === sel); return L && L.kind === 'fx' ? L : null; };
+const fxPart = L => L.region && L.region.mode !== 'all' && L.region.w > 0 && L.region.h > 0;
+function applyFxLayer(c, f, L) {                // эффекты для всего, что нарисовано ниже, в пределах рамки кадра (или выбранной области)
+  const m = c.getTransform(), cw = c.canvas.width, ch = c.canvas.height;
+  const fx0 = m.e + f.fx * m.a, fy0 = m.f + f.fy * m.d, fw = f.W * m.a, fh = f.H * m.d;
+  const part = fxPart(L), R = L.region, ell = part && R.mode === 'ellipse';
+  const rx = part ? fx0 + R.x * m.a : fx0, ry = part ? fy0 + R.y * m.d : fy0, rw = part ? R.w * m.a : fw, rh = part ? R.h * m.d : fh;
+  const feather = part ? Math.max(0, R.feather) * m.a : 0;
+  // прямоугольник обработки: вся рамка, а для небольшой области — только она (+ край), так быстрее
+  let ax0 = fx0, ay0 = fy0, ax1 = fx0 + fw, ay1 = fy0 + fh;
+  if (part && !R.inv) { const e = feather / 2 + 2; ax0 = Math.max(ax0, rx - e); ay0 = Math.max(ay0, ry - e); ax1 = Math.min(ax1, rx + rw + e); ay1 = Math.min(ay1, ry + rh + e); }
+  const x0 = Math.max(0, Math.floor(ax0)), y0 = Math.max(0, Math.floor(ay0)), x1 = Math.min(cw, Math.ceil(ax1)), y1 = Math.min(ch, Math.ceil(ay1));
+  const w = x1 - x0, h = y1 - y0;
+  if (w > 0 && h > 0 && !adjIsDefault(L.adj)) {
+    const im = c.getImageData(x0, y0, w, h), orig = (L.op < 100 || part) ? new Uint8ClampedArray(im.data) : null;
+    const vc = part && !R.inv ? [rx + rw / 2, ry + rh / 2, rw / 2, rh / 2] : [fx0 + fw / 2, fy0 + fh / 2, fw / 2, fh / 2];
+    applyEffects(im, w, h, L.adj, { scale:m.a, cx:vc[0] - x0, cy:vc[1] - y0, hw:vc[2], hh:vc[3], seed:L.id.charCodeAt(0) * 31 + L.id.charCodeAt(1) });
+    if (orig) {
+      const d = im.data, k = L.op / 100, ccx = rx + rw / 2, ccy = ry + rh / 2, mn = Math.min(rw, rh) / 2;
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        let mk = k;
+        if (part) {
+          const px = x0 + x + .5, py = y0 + y + .5;
+          const sd = ell ? (1 - Math.hypot((px - ccx) / (rw / 2), (py - ccy) / (rh / 2))) * mn     // «расстояние» до края внутрь (>0 — внутри)
+                         : Math.min(px - rx, rx + rw - px, py - ry, ry + rh - py);
+          let a = feather > 0 ? Math.min(1, Math.max(0, 0.5 + sd / feather)) : (sd >= 0 ? 1 : 0);
+          mk *= R.inv ? 1 - a : a;
+        }
+        const j = (y * w + x) * 4;
+        d[j] = orig[j] + (d[j] - orig[j]) * mk; d[j+1] = orig[j+1] + (d[j+1] - orig[j+1]) * mk; d[j+2] = orig[j+2] + (d[j+2] - orig[j+2]) * mk;
+      }
+    }
+    c.putImageData(im, x0, y0);
+  }
+  const bw = Math.round(L.border.w * m.a);
+  if (bw > 0) {
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.fillStyle = L.border.color;
+    const bx = Math.round(fx0), by = Math.round(fy0), bwid = Math.round(fw), bh = Math.round(fh);
+    c.fillRect(bx, by, bwid, bw); c.fillRect(bx, by + bh - bw, bwid, bw); c.fillRect(bx, by, bw, bh); c.fillRect(bx + bwid - bw, by, bw, bh);
+    c.restore();
+  }
+}
+function exportCanvas(f, textOnly) {
+  const t = f === F() ? curText : makeTextCanvas(f.rows, f);
+  if (!f.hasBg || textOnly) return t;
+  const c = document.createElement('canvas'); c.width = Math.round(f.W); c.height = Math.round(f.H);
+  composeFrame(c.getContext('2d'), f, 1, t); return c;
+}
+function downloadBlob(blob, name) {
+  const a = document.createElement('a'); a.download = name; a.href = URL.createObjectURL(blob); a.style.display = 'none';
+  document.body.appendChild(a); a.click(); setTimeout(() => { a.remove(); URL.revokeObjectURL(a.href); }, 5000);
+}
+const safe = s => (s || 'кадр').replace(/[\\/:*?"<>|]+/g, '_');
+const download = (canvas, name) => canvas.toBlob(b => downloadBlob(b, safe(name) + '.png'));
+$('copy').onclick = () => exportCanvas(F()).toBlob(async b => {
+  try { await navigator.clipboard.write([new ClipboardItem({'image/png': b})]); $('copy').textContent = 'Скопировано ✓'; }
+  catch { $('copy').textContent = 'Не удалось — используйте «Скачать»'; }
+  setTimeout(() => $('copy').textContent = 'Копировать в буфер', 2000);
+});
+
+/* ================= ВИД (редактор) ================= */
+const view = $('view'), vctx = view.getContext('2d', { willReadFrequently:true });
+const M = 36;                       // поля вокруг кадра, px экрана
+let V = { z:1, ox:0, oy:0 };        // масштаб и мировое смещение вида
+let drag = null;
+
+let _pat = null;
+function checker() {
+  if (_pat) return _pat;
+  const c = document.createElement('canvas'); c.width = c.height = 16;
+  const x = c.getContext('2d'); x.fillStyle = TH.c1; x.fillRect(0,0,16,16); x.fillStyle = TH.c2; x.fillRect(0,0,8,8); x.fillRect(8,8,8,8);
+  return _pat = vctx.createPattern(c, 'repeat');
+}
+let viewZoom = null;                            // null — «вписать в окно», иначе масштаб просмотра
+function fit() {
+  const f = F(), pv = $('pv'), st = $('stage');
+  pv.classList.toggle('edit', f.hasBg);
+  if (!f.hasBg) {
+    view.width = curText.width; view.height = curText.height;
+    view.style.width = view.width + 'px'; view.style.height = view.height + 'px';
+    V = { z:1, ox:0, oy:0 }; updateZoomLabel(); return;
+  }
+  const aw = Math.max(240, st.clientWidth - 8), ah = Math.max(180, st.clientHeight - 8);
+  const zf = Math.min(2, (aw - 2*M) / f.W, (ah - 2*M) / f.H), z = viewZoom == null ? zf : viewZoom;
+  V = { z, ox: f.fx - M/z, oy: f.fy - M/z };
+  const ew = Math.max(f.W, f.tx + curText.width), eh = Math.max(f.H, f.ty + curText.height);   // чтобы ручки текста всегда были достижимы
+  view.width = Math.round(ew*z + 2*M); view.height = Math.round(eh*z + 2*M);
+  view.style.width = view.width + 'px'; view.style.height = view.height + 'px';
+  updateZoomLabel();
+}
+function geom() {
+  const f = F(), z = V.z, X = wx => (wx - V.ox) * z, Y = wy => (wy - V.oy) * z;
+  return { f, z, X, Y, fx:X(f.fx), fy:Y(f.fy), fw:f.W*z, fh:f.H*z,
+           txv:X(f.fx+f.tx), tyv:Y(f.fy+f.ty), tw:curText.width*z, th:curText.height*z };
+}
+function textHandles(g) {
+  return [
+    { hx:true,  hy:false, x:g.txv + g.tw,   y:g.tyv + g.th/2 },   // ширина
+    { hx:false, hy:true,  x:g.txv + g.tw/2, y:g.tyv + g.th },     // высота (размер)
+    { hx:true,  hy:true,  x:g.txv + g.tw,   y:g.tyv + g.th },     // масштаб целиком
+  ];
+}
+function regionGeom(L, g) { const R = L.region; return { x:g.X(g.f.fx + R.x), y:g.Y(g.f.fy + R.y), w:R.w * g.z, h:R.h * g.z }; }
+function regionHandles(q) {
+  const xs = [q.x, q.x + q.w / 2, q.x + q.w], ys = [q.y, q.y + q.h / 2, q.y + q.h], o = [];
+  for (const x of xs) for (const y of ys) if (!(x === xs[1] && y === ys[1])) o.push([x, y]);
+  return o;
+}
+function layerGeom(L, g) {
+  const a = L.rot * Math.PI / 180, cs = Math.cos(a), sn = Math.sin(a), hw = L.iw * L.s / 2, hh = L.ih * L.s / 2;
+  const tf = (x, y) => ({ x:g.X(L.cx + x*cs - y*sn), y:g.Y(L.cy + x*sn + y*cs) });
+  const top = tf(0, -hh), c = tf(0, 0), ux = sn, uy = -cs;
+  return { c4:[tf(-hw, -hh), tf(hw, -hh), tf(hw, hh), tf(-hw, hh)], top, c, rot:{ x:top.x + ux*28, y:top.y + uy*28 } };
+}
+function draw() {
+  const c = vctx, f = F(), t = curText;
+  c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, view.width, view.height);
+  if (!f.hasBg) { c.drawImage(t, 0, 0); return; }
+  const g = geom(), z = g.z, world = () => c.setTransform(z, 0, 0, z, -V.ox * z, -V.oy * z);
+  c.fillStyle = TH.stage; c.fillRect(0, 0, view.width, view.height);
+  c.save(); world(); paintWorld(c, f, t, { alpha:.33, text:false }); c.restore();   // затемнённое содержимое за пределами кадра
+  c.save(); c.beginPath(); c.rect(g.fx, g.fy, g.fw, g.fh); c.clip();
+  c.fillStyle = checker(); c.fillRect(g.fx, g.fy, g.fw, g.fh);                      // шахматка там, где фона нет
+  world(); paintWorld(c, f, t); c.restore();
+  // выделенный текст: пунктирная рамка + синие ручки
+  const tl = f.layers.find(l => l.kind === 'text');
+  if (sel === 'text' && tl.visible) {
+    c.save(); c.strokeStyle = 'rgba(90,170,255,.95)'; c.setLineDash([5,4]); c.lineWidth = 1;
+    c.strokeRect(Math.round(g.txv)+.5, Math.round(g.tyv)+.5, g.tw, g.th); c.setLineDash([]);
+    c.fillStyle = '#3b8cff'; c.strokeStyle = '#fff';
+    for (const h of textHandles(g)) { c.fillRect(h.x-4.5, h.y-4.5, 9, 9); c.strokeRect(h.x-4.5, h.y-4.5, 9, 9); }
+    c.restore();
+  }
+  // выделенный слой-изображение: оранжевая рамка, угловые ручки, ручка поворота
+  const SL = selImg(f);
+  if (SL && SL.img) {
+    const lg = layerGeom(SL, g);
+    c.save(); c.strokeStyle = '#ffb020'; c.lineWidth = 1.5; c.beginPath();
+    lg.c4.forEach((q, i) => i ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y)); c.closePath(); c.stroke();
+    c.beginPath(); c.moveTo(lg.top.x, lg.top.y); c.lineTo(lg.rot.x, lg.rot.y); c.stroke();
+    c.fillStyle = '#ffb020'; c.strokeStyle = '#000'; c.lineWidth = 1;
+    for (const q of lg.c4) { c.fillRect(q.x-4.5, q.y-4.5, 9, 9); c.strokeRect(q.x-4.5, q.y-4.5, 9, 9); }
+    c.beginPath(); c.arc(lg.rot.x, lg.rot.y, 6, 0, 7); c.fill(); c.stroke(); c.restore();
+  }
+  // область действия выбранного слоя «Эффекты»
+  const SX = selFx(f);
+  if (SX && SX.visible && fxPart(SX)) {
+    const q = regionGeom(SX, g);
+    c.save(); c.strokeStyle = '#37d6ff'; c.lineWidth = 1.5; c.setLineDash([6, 4]);
+    if (SX.region.mode === 'ellipse') { c.beginPath(); c.ellipse(q.x + q.w / 2, q.y + q.h / 2, q.w / 2, q.h / 2, 0, 0, 7); c.stroke(); } else c.strokeRect(q.x, q.y, q.w, q.h);
+    c.setLineDash([]); c.fillStyle = '#37d6ff'; c.strokeStyle = '#000'; c.lineWidth = 1;
+    for (const [hx, hy] of regionHandles(q)) { c.fillRect(hx - 4, hy - 4, 8, 8); c.strokeRect(hx - 4, hy - 4, 8, 8); }
+    c.restore();
+  }
+  // рамка кадра и белые ручки
+  c.save(); c.strokeStyle = '#fff'; c.lineWidth = 1.5; c.strokeRect(g.fx, g.fy, g.fw, g.fh);
+  c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.lineWidth = 1;
+  for (const [hx, hy] of handlePts(g)) { c.fillRect(hx-4, hy-4, 8, 8); c.strokeRect(hx-4, hy-4, 8, 8); }
+  c.restore();
+}
+function handlePts(g) {
+  const xs = [g.fx, g.fx + g.fw/2, g.fx + g.fw], ys = [g.fy, g.fy + g.fh/2, g.fy + g.fh];
+  const out = []; for (const x of xs) for (const y of ys) if (!(x === xs[1] && y === ys[1])) out.push([x, y]);
+  return out;
+}
+
+function pointer(e) {
+  const r = view.getBoundingClientRect();
+  return { x:(e.clientX - r.left) * view.width / r.width, y:(e.clientY - r.top) * view.height / r.height };
+}
+function layerLocal(L, p) {                    // точка вида → координаты в пикселях исходного изображения слоя
+  const wx = p.x / V.z + V.ox, wy = p.y / V.z + V.oy, a = L.rot * Math.PI / 180, cs = Math.cos(a), sn = Math.sin(a);
+  const dx = wx - L.cx, dy = wy - L.cy; let lx = dx*cs + dy*sn; const ly = -dx*sn + dy*cs;
+  if (L.flip) lx = -lx;
+  return { u: lx / L.s + L.iw / 2, v: ly / L.s + L.ih / 2 };
+}
+function hitImg(L, p) {                        // попадание по непрозрачному пикселю слоя
+  const { u, v } = layerLocal(L, p), cv = layerCanvas(L), pd = cv.pad || 0, px = Math.floor(u) + pd, py = Math.floor(v) + pd;
+  if (px < 0 || py < 0 || px >= cv.width || py >= cv.height) return false;
+  return cv.getContext('2d').getImageData(px, py, 1, 1).data[3] * L.op / 100 > 12;
+}
+function hitText(p, g) {                       // выбранный текст берётся за любую точку рамки, невыбранный — только за буквы (±5 px)
+  if (p.x < g.txv || p.x > g.txv + g.tw || p.y < g.tyv || p.y > g.tyv + g.th) return false;
+  if (sel === 'text') return true;
+  const u = Math.floor((p.x - g.txv) / g.z), v = Math.floor((p.y - g.tyv) / g.z), r = 5;
+  const x0 = Math.max(0, u - r), y0 = Math.max(0, v - r), w = Math.min(curText.width - x0, 2*r + 1), h = Math.min(curText.height - y0, 2*r + 1);
+  if (w <= 0 || h <= 0) return false;
+  const d = curText.getContext('2d').getImageData(x0, y0, w, h).data;
+  for (let i = 3; i < d.length; i += 4) if (d[i] > 40) return true;
+  return false;
+}
+function hit(p) {
+  const g = geom(), f = F(), T = 8, near = (a, b, r = 8) => Math.abs(p.x - a) <= r && Math.abs(p.y - b) <= r;
+  const SL = selImg(f);
+  if (SL && SL.visible && SL.img) {
+    const lg = layerGeom(SL, g);
+    if (near(lg.rot.x, lg.rot.y, 9)) return { k:'lrot' };
+    for (let i = 0; i < 4; i++) if (near(lg.c4[i].x, lg.c4[i].y)) return { k:'lscale', i };
+  }
+  if (sel === 'text') for (const h of textHandles(g)) if (near(h.x, h.y)) return { k:'tsz', hx:h.hx, hy:h.hy };
+  const SX = selFx(f);
+  if (SX && SX.visible && fxPart(SX)) {                          // область эффекта: края — размер, внутри — перемещение
+    const q = regionGeom(SX, g), inY = p.y >= q.y - T && p.y <= q.y + q.h + T, inX = p.x >= q.x - T && p.x <= q.x + q.w + T;
+    const l = inY && Math.abs(p.x - q.x) <= T, r = inY && Math.abs(p.x - (q.x + q.w)) <= T, t = inX && Math.abs(p.y - q.y) <= T, b = inX && Math.abs(p.y - (q.y + q.h)) <= T;
+    if (l || r || t || b) return { k:'rsz', l, r, t, b };
+    if (p.x >= q.x && p.x <= q.x + q.w && p.y >= q.y && p.y <= q.y + q.h) return { k:'rmove' };
+  }
+  const inY = p.y >= g.fy - T && p.y <= g.fy + g.fh + T, inX = p.x >= g.fx - T && p.x <= g.fx + g.fw + T;
+  const l = inY && Math.abs(p.x - g.fx) <= T, r = inY && Math.abs(p.x - (g.fx+g.fw)) <= T;
+  const t = inX && Math.abs(p.y - g.fy) <= T, b = inX && Math.abs(p.y - (g.fy+g.fh)) <= T;
+  if (l || r || t || b) return { k:'resize', l, r, t, b };
+  for (let i = f.layers.length - 1; i >= 0; i--) {              // сверху вниз: берём первый слой под курсором
+    const L = f.layers[i]; if (!L.visible) continue;
+    if (L.kind === 'text') { if (hitText(p, g)) return { k:'text' }; }
+    else if (L.img && hitImg(L, p)) return { k:'lmove', id:L.id };
+  }
+  return { k:'bg' };
+}
+function cursorFor(h) {
+  if (h.k === 'text' || h.k === 'lmove' || h.k === 'rmove') return 'move';
+  if (h.k === 'bg') return 'grab';
+  if (h.k === 'lrot') return 'grab';
+  if (h.k === 'lscale') return h.i % 2 ? 'nesw-resize' : 'nwse-resize';
+  if (h.k === 'tsz') return h.hx && h.hy ? 'nwse-resize' : h.hx ? 'ew-resize' : 'ns-resize';
+  const ns = h.t || h.b, ew = h.l || h.r;
+  if (ns && ew) return ((h.l && h.t) || (h.r && h.b)) ? 'nwse-resize' : 'nesw-resize';
+  return ns ? 'ns-resize' : 'ew-resize';
+}
+view.addEventListener('pointerdown', e => {
+  const f = F(); if (!f.hasBg) return;
+  const p = pointer(e);
+  if (pickMode) { doPick(p); return; }
+  const h = hit(p);
+  view.setPointerCapture(e.pointerId);
+  if (h.k === 'text') setSel('text'); else if (h.k === 'lmove') setSel(h.id); else if (h.k === 'bg') setSel('bg');
+  const L = selImg(f);
+  drag = { ...h, p, L, s:{ W:f.W, H:f.H, fx:f.fx, fy:f.fy, bx:f.bx, by:f.by, tx:f.tx, ty:f.ty, ts:f.ts || 1, cw:curText.width, ch:curText.height } };
+  const SXd = selFx(f);
+  if (SXd) { drag.SX = SXd; Object.assign(drag.s, { rx:SXd.region.x, ry:SXd.region.y, rw:SXd.region.w, rh:SXd.region.h }); }
+  drag.regs = f.layers.filter(l => l.kind === 'fx').map(l => [l, l.region.x, l.region.y]);
+  if (L && L.img) {
+    const lg = layerGeom(L, geom());
+    Object.assign(drag.s, { cx:L.cx, cy:L.cy, ls:L.s, rot:L.rot });
+    drag.c = lg.c; drag.d0 = Math.hypot(p.x - lg.c.x, p.y - lg.c.y) || 1; drag.a0 = Math.atan2(p.y - lg.c.y, p.x - lg.c.x);
+  }
+  if (h.k === 'bg') view.style.cursor = 'grabbing';
+});
+view.addEventListener('pointermove', e => {
+  if (!F().hasBg) return;
+  const p = pointer(e);
+  if (!drag) { view.style.cursor = pickMode ? 'crosshair' : cursorFor(hit(p)); return; }
+  const f = F(), s = drag.s, dx = (p.x - drag.p.x) / V.z, dy = (p.y - drag.p.y) / V.z, L = drag.L;
+  if (drag.k === 'text') { f.tx = Math.round(s.tx + dx); f.ty = Math.round(s.ty + dy); }
+  else if (drag.k === 'bg') { f.bx = s.bx + dx; f.by = s.by + dy; }
+  else if (drag.k === 'lmove' && L) { L.cx = s.cx + dx; L.cy = s.cy + dy; }
+  else if (drag.k === 'lscale' && L) { L.s = clamp(s.ls * Math.hypot(p.x - drag.c.x, p.y - drag.c.y) / drag.d0, 0.02, 30); }
+  else if (drag.k === 'lrot' && L) {
+    let r = s.rot + (Math.atan2(p.y - drag.c.y, p.x - drag.c.x) - drag.a0) * 180 / Math.PI;
+    r = ((r + 180) % 360 + 360) % 360 - 180; if (e.shiftKey) r = Math.round(r / 15) * 15;
+    L.rot = Math.round(r * 10) / 10;
+  }
+  else if (drag.k === 'tsz') {
+    if (drag.hx && !drag.hy) { f.tw = Math.max(60, Math.round(s.cw + dx)); $('wrap').checked = true; }       // ширина
+    else if (drag.hy && !drag.hx) { f.ts = clamp(s.ts * (s.ch + dy) / s.ch, 0.3, 5); }                          // высота = размер
+    else { const r = Math.max(0.2, (s.cw + dx) / s.cw); f.ts = clamp(s.ts * r, 0.3, 5); f.tw = Math.round(s.cw * r); $('wrap').checked = true; }
+    curText = makeTextCanvas(f.rows, f);
+  } else if (drag.k === 'rmove' && drag.SX) { drag.SX.region.x = Math.round(s.rx + dx); drag.SX.region.y = Math.round(s.ry + dy); }
+  else if (drag.k === 'rsz' && drag.SX) {
+    const R = drag.SX.region; let x = s.rx, y = s.ry, w = s.rw, h = s.rh;
+    if (drag.r) w = Math.max(10, Math.round(s.rw + dx));
+    if (drag.b) h = Math.max(10, Math.round(s.rh + dy));
+    if (drag.l) { const nw = Math.max(10, Math.round(s.rw - dx)); x = s.rx + s.rw - nw; w = nw; }
+    if (drag.t) { const nh = Math.max(10, Math.round(s.rh - dy)); y = s.ry + s.rh - nh; h = nh; }
+    Object.assign(R, { x, y, w, h });
+  } else if (drag.k === 'resize') {
+    let { W, H, fx, fy, tx, ty } = s;
+    if (drag.r) W = Math.max(20, Math.round(s.W + dx));
+    if (drag.b) H = Math.max(20, Math.round(s.H + dy));
+    if (drag.l) { const nw = Math.max(20, Math.round(s.W - dx)), d = s.W - nw; fx = s.fx + d; W = nw; tx = s.tx - d; }
+    if (drag.t) { const nh = Math.max(20, Math.round(s.H - dy)), d = s.H - nh; fy = s.fy + d; H = nh; ty = s.ty - d; }
+    Object.assign(f, { W, H, fx, fy, tx, ty });
+    for (const [l, x0, y0] of drag.regs) { l.region.x = x0 - (fx - s.fx); l.region.y = y0 - (fy - s.fy); }   // области эффектов остаются на месте
+  }
+  syncGeo(); draw();
+});
+const endDrag = () => {
+  if (!drag) return; const k = drag.k; drag = null; view.style.cursor = '';
+  fit(); draw(); afterChange(); if (k === 'lscale' || k === 'lrot' || k === 'lmove' || k === 'rmove' || k === 'rsz') renderProps();
+};
+view.addEventListener('pointerup', endDrag);
+view.addEventListener('pointercancel', endDrag);
+view.addEventListener('wheel', e => {
+  const f = F(); if (!f.hasBg) return;
+  e.preventDefault();
+  const p = pointer(e), k = e.deltaY < 0 ? 1.1 : 1/1.1;
+  zoomBg(k, p.x / V.z + V.ox, p.y / V.z + V.oy);
+}, { passive:false });
+
+function zoomBg(k, wx, wy) {            // масштабирование фона вокруг мировой точки
+  const f = F(), ns = clamp(f.bs * k, 0.05, 20), kk = ns / f.bs;
+  f.bx = wx - (wx - f.bx) * kk; f.by = wy - (wy - f.by) * kk; f.bs = ns;
+  syncGeo(); draw(); afterChange();
+}
+
+/* ---- панель инструментов ---- */
+function syncGeo() {
+  const f = F(), has = f.hasBg;
+  document.querySelectorAll('[data-needbg]').forEach(e => e.disabled = !has);
+  updateHint();
+  const set = (id, v) => { if (document.activeElement !== $(id)) $(id).value = v; };
+  set('tW', Math.round(f.tw || +$('width').value || 650)); set('tS', Math.round((f.ts || 1) * 100));
+  if (!has) return;
+  set('bgS', Math.round(f.bs * 100)); set('fW', Math.round(f.W)); set('fH', Math.round(f.H));
+  set('tX', Math.round(f.tx)); set('tY', Math.round(f.ty));
+}
+function geomChanged() { fit(); draw(); afterChange(); }
+const cen = () => { const f = F(); return [f.fx + f.W/2, f.fy + f.H/2]; };
+function placeBg(s) {                    // масштаб s, фон по центру кадра
+  const f = F(), iw = f.bgImg.width, ih = f.bgImg.height;
+  f.bs = s; f.bx = f.fx + (f.W - iw*s)/2; f.by = f.fy + (f.H - ih*s)/2;
+}
+$('bFill').onclick = () => { const f = F(); placeBg(Math.max(f.W / f.bgImg.width, f.H / f.bgImg.height)); syncGeo(); draw(); afterChange(); };
+$('bFit').onclick = () => { const f = F(); placeBg(Math.min(f.W / f.bgImg.width, f.H / f.bgImg.height)); syncGeo(); draw(); afterChange(); };
+$('b100').onclick = () => { placeBg(1); syncGeo(); draw(); afterChange(); };
+$('bFrame').onclick = () => {
+  const f = F();
+  f.tx -= (f.bx - f.fx); f.ty -= (f.by - f.fy);
+  f.fx = f.bx; f.fy = f.by; f.W = Math.round(f.bgImg.width * f.bs); f.H = Math.round(f.bgImg.height * f.bs);
+  syncGeo(); geomChanged();
+};
+$('bgS').oninput = () => { const f = F(), v = +$('bgS').value; if (v >= 5) { const [cx, cy] = cen(); zoomBg((v/100) / f.bs, cx, cy); } };
+$('fW').oninput = () => { const v = +$('fW').value; if (v >= 20) { F().W = v; geomChanged(); } };
+$('fH').oninput = () => { const v = +$('fH').value; if (v >= 20) { F().H = v; geomChanged(); } };
+$('tX').oninput = () => { F().tx = +$('tX').value || 0; draw(); afterChange(); };
+$('tY').oninput = () => { F().ty = +$('tY').value || 0; draw(); afterChange(); };
+$('tW').oninput = () => { const v = +$('tW').value; if (v >= 60) { F().tw = v; $('wrap').checked = true; applyFrame(); afterChange(); } };
+$('tS').oninput = () => { const v = +$('tS').value; if (v >= 20) { F().ts = clamp(v / 100, 0.2, 5); applyFrame(); afterChange(); } };
+$('tReset').onclick = () => { F().tw = null; F().ts = 1; applyFrame(); afterChange(); };
+
+async function rotateBg(dir) {
+  const f = F(), im = f.bgImg, iw = im.width, ih = im.height;
+  const c = document.createElement('canvas'); c.width = ih; c.height = iw;
+  const x = c.getContext('2d'); x.translate(dir > 0 ? ih : 0, dir > 0 ? 0 : iw); x.rotate(dir * Math.PI / 2); x.drawImage(im, 0, 0);
+  const cx = f.bx + iw*f.bs/2, cy = f.by + ih*f.bs/2;
+  const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+  f.imgId = await putImage(blob); f.bgImg = await createImageBitmap(blob);
+  f.bx = cx - ih*f.bs/2; f.by = cy - iw*f.bs/2;
+  draw(); afterChange();
+}
+$('rotL').onclick = () => rotateBg(-1);
+$('rotR').onclick = () => rotateBg(1);
+
+/* ---- загрузка скриншотов ---- */
+async function applyBg(f, file) {
+  const id = await putImage(file), img = await createImageBitmap(file);
+  Object.assign(f, { hasBg:true, imgId:id, bgImg:img, bx:0, by:0, bs:1, fx:0, fy:0, W:img.width, H:img.height, tx:10 });
+  const t = f === F() ? curText : makeTextCanvas(f.rows, f);
+  f.ty = Math.max(10, img.height - t.height - 10);        // по умолчанию текст внизу слева
+}
+async function addScreenshots(files) {
+  files = [...files].filter(f => f.type.startsWith('image/'));
+  if (!files.length || busy) return;
+  F().rows = getRows();
+  let matched = 0;
+  for (let i = 0; i < files.length; i++) {
+    const base = files[i].name.replace(/\.[^.]+$/, '').toLowerCase();       // sa-mp-023.jpg → кадр, созданный из chatlog
+    const tgt = frames.find(fr => fr.shot && !fr.hasBg && fr.shot.toLowerCase() === base);
+    if (tgt) { await applyBg(tgt, files[i]); matched++; continue; }
+    if (i === 0 && !F().hasBg && !matched) await applyBg(F(), files[i]);
+    else {
+      const nf = newFrame(JSON.parse(JSON.stringify(F().rows)));
+      nf.tw = F().tw; nf.ts = F().ts;
+      await applyBg(nf, files[i]); frames.push(nf); active = frames.length - 1;
+    }
+  }
+  renderTiles(); renderSitTabs(); switchTo(active, true);
+  if (matched) toast(`Скриншотов привязано к кадрам по имени файла: ${matched}`);
+}
+$('bgBtn').onclick = () => $('bgFile').click();
+$('bgFile').onchange = e => { addScreenshots(e.target.files); e.target.value = ''; };
+$('bgClear').onclick = () => { const f = F(); f.hasBg = false; f.bgImg = null; f.imgId = ''; f._bgProc = null; sel = 'text'; applyFrame(); renderLayersUI(); afterChange(); };
+window.addEventListener('paste', e => {
+  const files = [...(e.clipboardData?.items || [])].filter(i => i.type.startsWith('image/')).map(i => i.getAsFile());
+  if (files.length) addScreenshots(files);
+});
+document.addEventListener('dragover', e => { e.preventDefault(); $('stage').classList.add('drop'); });
+document.addEventListener('dragleave', e => { e.preventDefault(); $('stage').classList.remove('drop'); });
+document.addEventListener('drop', e => {
+  e.preventDefault(); $('stage').classList.remove('drop');
+  if ($('layersSec').contains(e.target) && F().hasBg) addLayerFiles(e.dataTransfer.files); else addScreenshots(e.dataTransfer.files);
+});
+window.addEventListener('resize', () => { if (curText) { fit(); draw(); } });
+
+/* ================= СЛОИ ================= */
+let sel = 'text', pickMode = false;                        // выделенный слой: id | 'text' | 'bg'
+const selImg = f => { const L = f.layers.find(l => l.id === sel); return L && L.kind === 'img' ? L : null; };
+const BLENDS = [['source-over','Обычный'], ['multiply','Умножение (белое исчезает)'], ['screen','Экран'], ['overlay','Перекрытие'], ['darken','Затемнение'], ['lighten','Осветление']];
+const hexRGB = h => { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+const rgbHex = (r, g, b) => '#' + [r, g, b].map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
+const FX_KEYS = ['bri', 'con', 'sat', 'hue', 'temp', 'bw', 'sepia', 'tint', 'fade', 'vig', 'grain', 'blur', 'sharp'];
+const adjIsDefault = a => !a || (!a.inv && FX_KEYS.every(k => !a[k]));
+
+function boxBlur(d, w, h, r) {                 // быстрое размытие (2 прохода по прямоугольному окну)
+  const ri = Math.max(1, Math.round(r * 0.8)), tmp = new Uint8ClampedArray(d.length), win = 2 * ri + 1;
+  const pass = (src, dst, horiz) => {
+    const n = horiz ? w : h, lines = horiz ? h : w, stride = horiz ? 4 : w * 4, lstride = horiz ? w * 4 : 4;
+    for (let l = 0; l < lines; l++) {
+      const base = l * lstride;
+      for (let c = 0; c < 4; c++) {
+        let sum = 0;
+        for (let k = -ri; k <= ri; k++) sum += src[base + Math.min(n - 1, Math.max(0, k)) * stride + c];
+        for (let i = 0; i < n; i++) {
+          dst[base + i * stride + c] = sum / win;
+          sum += src[base + Math.min(n - 1, i + ri + 1) * stride + c] - src[base + Math.max(0, i - ri) * stride + c];
+        }
+      }
+    }
+  };
+  for (let it = 0; it < 2; it++) { pass(d, tmp, true); pass(tmp, d, false); }
+}
+function sharpen(d, w, h, k) {
+  const s = new Uint8ClampedArray(d), row = w * 4;
+  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) for (let c = 0; c < 3; c++) {
+    const i = (y * w + x) * 4 + c;
+    d[i] = s[i] + k * 0.9 * (4 * s[i] - s[i - 4] - s[i + 4] - s[i - row] - s[i + row]);
+  }
+}
+const noise = (x, y, s) => { let h = Math.imul(x, 374761393) + Math.imul(y, 668265263) + s; h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16; return (h >>> 0) / 4294967296; };
+
+/* Цветокоррекция и эффекты для ImageData: работает и для фона/слоёв, и для всего кадра («Эффекты кадра») */
+function applyEffects(im, w, h, P, o = {}) {
+  const d = im.data, sc = o.scale || 1;
+  if (P.blur > 0) boxBlur(d, w, h, Math.max(0.5, P.blur * sc));
+  if (P.sharp > 0) sharpen(d, w, h, P.sharp / 100);
+  const bri = P.bri * 2.55, con = Math.tan(clamp((P.con + 100) / 200 * Math.PI / 2, 0.001, 1.45)), tmp = P.temp * 0.6, sat = 1 + P.sat / 100;
+  const ang = P.hue * Math.PI / 180, cs = Math.cos(ang), sn = Math.sin(ang);
+  const m0 = .213 + cs*.787 - sn*.213, m1 = .715 - cs*.715 - sn*.715, m2 = .072 - cs*.072 + sn*.928,
+        m3 = .213 - cs*.213 + sn*.143, m4 = .715 + cs*.285 + sn*.140, m5 = .072 - cs*.072 - sn*.283,
+        m6 = .213 - cs*.213 - sn*.787, m7 = .715 - cs*.715 + sn*.715, m8 = .072 + cs*.928 + sn*.072;
+  const bw = P.bw / 100, sep = P.sepia / 100, tint = P.tint / 100, [tr, tg, tb] = hexRGB(P.tintC || '#b0803c'), fade = P.fade / 100;
+  const vig = P.vig / 100, start = 0.35 + 0.6 * (P.vsize ?? 50) / 100, grain = P.grain / 100 * 55, gs = Math.max(1, Math.round(P.gsize || 1)), seed = o.seed || 7;
+  const cx = o.cx ?? w / 2, cy = o.cy ?? h / 2, hw = o.hw ?? w / 2, hh = o.hh ?? h / 2;
+  const colorOn = P.bri || P.con || P.temp || P.sat || P.hue || P.inv;
+  for (let y = 0; y < h; y++) {
+    const vdy = vig > 0 ? (y + .5 - cy) / hh : 0;
+    for (let x = 0; x < w; x++) {
+      const j = (y * w + x) * 4; if (d[j+3] === 0) continue;
+      let r = d[j], g = d[j+1], b = d[j+2];
+      if (colorOn) {
+        if (P.inv) { r = 255 - r; g = 255 - g; b = 255 - b; }
+        r += bri; g += bri; b += bri;
+        r = (r - 128) * con + 128; g = (g - 128) * con + 128; b = (b - 128) * con + 128;
+        r += tmp; b -= tmp;
+        const gy = .299 * r + .587 * g + .114 * b; r = gy + (r - gy) * sat; g = gy + (g - gy) * sat; b = gy + (b - gy) * sat;
+        if (ang) { const nr = m0*r + m1*g + m2*b, ng = m3*r + m4*g + m5*b, nb = m6*r + m7*g + m8*b; r = nr; g = ng; b = nb; }
+      }
+      if (bw > 0) { const gy = .299 * r + .587 * g + .114 * b; r += (gy - r) * bw; g += (gy - g) * bw; b += (gy - b) * bw; }
+      if (sep > 0) {
+        const sr = r*.393 + g*.769 + b*.189, sg = r*.349 + g*.686 + b*.168, sb = r*.272 + g*.534 + b*.131;
+        r += (sr - r) * sep; g += (sg - g) * sep; b += (sb - b) * sep;
+      }
+      if (tint > 0) {
+        const lum = Math.min(1, (.299 * r + .587 * g + .114 * b) / 255 * 1.35);
+        r += (tr * lum - r) * tint; g += (tg * lum - g) * tint; b += (tb * lum - b) * tint;
+      }
+      if (fade > 0) { const k = 1 - fade * 0.18; r = r * k + fade * 46; g = g * k + fade * 46; b = b * k + fade * 46; }
+      if (vig > 0) {
+        const dd = Math.hypot((x + .5 - cx) / hw, vdy) / 1.2;
+        let t = (dd - start) / (1.0001 - start);
+        if (t > 0) { t = Math.min(1, t); t = t * t * (3 - 2 * t); const k = 1 - vig * t; r *= k; g *= k; b *= k; }
+      }
+      if (grain > 0) { const n = (noise(Math.floor(x / gs), Math.floor(y / gs), seed) - 0.5) * 2 * grain; r += n; g += n; b += n; }
+      d[j] = r; d[j+1] = g; d[j+2] = b;
+    }
+  }
+}
+
+/* Обводка (расстояние до непрозрачных пикселей) и тень вокруг слоя-изображения */
+function decorate(c, st, sh) {
+  const w = c.width, h = c.height, sw = Math.max(0, st.w || 0);
+  const pad = Math.ceil(sw) + (sh.on ? Math.ceil(sh.blur * 1.5 + Math.max(Math.abs(sh.dx), Math.abs(sh.dy))) : 0) + 2, W = w + 2 * pad, H = h + 2 * pad;
+  let out = document.createElement('canvas'); out.width = W; out.height = H;
+  const x = out.getContext('2d', { willReadFrequently:true }); x.drawImage(c, pad, pad);
+  if (sw > 0) {
+    const im = x.getImageData(0, 0, W, H), d = im.data, n = W * H, dist = new Float32Array(n);
+    for (let i = 0; i < n; i++) dist[i] = d[i * 4 + 3] > 127 ? 0 : 1e9;
+    for (let y = 0; y < H; y++) for (let xx = 0; xx < W; xx++) {
+      const i = y * W + xx; let v = dist[i];
+      if (xx > 0) v = Math.min(v, dist[i - 1] + 3);
+      if (y > 0) { v = Math.min(v, dist[i - W] + 3); if (xx > 0) v = Math.min(v, dist[i - W - 1] + 4); if (xx < W - 1) v = Math.min(v, dist[i - W + 1] + 4); }
+      dist[i] = v;
+    }
+    for (let y = H - 1; y >= 0; y--) for (let xx = W - 1; xx >= 0; xx--) {
+      const i = y * W + xx; let v = dist[i];
+      if (xx < W - 1) v = Math.min(v, dist[i + 1] + 3);
+      if (y < H - 1) { v = Math.min(v, dist[i + W] + 3); if (xx < W - 1) v = Math.min(v, dist[i + W + 1] + 4); if (xx > 0) v = Math.min(v, dist[i + W - 1] + 4); }
+      dist[i] = v;
+    }
+    const [sr, sg, sb] = hexRGB(st.color);
+    for (let i = 0; i < n; i++) {
+      const a0 = d[i * 4 + 3] / 255, sa = Math.max(0, Math.min(1, sw + 0.5 - dist[i] / 3));
+      if (sa > 0 && a0 < 1) {
+        const oa = a0 + sa * (1 - a0);
+        d[i*4] = (d[i*4] * a0 + sr * sa * (1 - a0)) / oa; d[i*4+1] = (d[i*4+1] * a0 + sg * sa * (1 - a0)) / oa; d[i*4+2] = (d[i*4+2] * a0 + sb * sa * (1 - a0)) / oa;
+        d[i*4+3] = oa * 255;
+      }
+    }
+    x.putImageData(im, 0, 0);
+  }
+  if (sh.on) {
+    const o2 = document.createElement('canvas'); o2.width = W; o2.height = H;
+    const x2 = o2.getContext('2d', { willReadFrequently:true }), [r, g, b] = hexRGB(sh.color);
+    x2.shadowColor = `rgba(${r},${g},${b},${sh.op / 100})`; x2.shadowBlur = sh.blur; x2.shadowOffsetX = sh.dx; x2.shadowOffsetY = sh.dy;
+    x2.drawImage(out, 0, 0); out = o2;
+  }
+  out.pad = pad; return out;
+}
+
+/* Цветовой ключ (удаление фона) + эффекты + обводка/тень. Работает с копией, оригинал не меняется. */
+function processImage(src, w, h, adj, key, st, sh) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const x = c.getContext('2d', { willReadFrequently:true }); x.drawImage(src, 0, 0);
+  adj = adj || defAdj();
+  const useKey = !!(key && key.on), useAdj = !adjIsDefault(adj);
+  if (useKey || useAdj) {
+    const im = x.getImageData(0, 0, w, h), d = im.data, n = w * h;
+    if (useKey) {
+      const [kr, kg, kb] = hexRGB(key.color), t = key.tol / 100 * 0.5, sf = Math.max(0.001, key.soft / 100 * 0.3);
+      const dist = i => { const j = i * 4, dr = d[j] - kr, dg = d[j+1] - kg, db = d[j+2] - kb; return Math.sqrt(dr*dr + dg*dg + db*db) / 441.673; };
+      let mask = null;
+      if (key.mode === 'edge') {                           // только фон, связанный с краями картинки
+        mask = new Uint8Array(n); const q = new Int32Array(n), lim = t + sf; let qh = 0, qt = 0;
+        const push = i => { if (!mask[i] && dist(i) <= lim) { mask[i] = 1; q[qt++] = i; } };
+        for (let i = 0; i < w; i++) { push(i); push((h - 1) * w + i); }
+        for (let j = 0; j < h; j++) { push(j * w); push(j * w + w - 1); }
+        while (qh < qt) { const i = q[qh++], px = i % w; if (px > 0) push(i - 1); if (px < w - 1) push(i + 1); if (i >= w) push(i - w); if (i < n - w) push(i + w); }
+      }
+      for (let i = 0; i < n; i++) {
+        if (mask && !mask[i]) continue;
+        const j = i * 4, dd = dist(i);
+        if (dd <= t) d[j+3] = 0;
+        else if (dd < t + sf) {                            // мягкий край + «снятие» цвета фона с полупрозрачных пикселей
+          const u = (dd - t) / sf, k = u * u * (3 - 2 * u);
+          if (k > 0.02) { d[j] = (d[j] - kr * (1 - k)) / k; d[j+1] = (d[j+1] - kg * (1 - k)) / k; d[j+2] = (d[j+2] - kb * (1 - k)) / k; }
+          d[j+3] *= k;
+        }
+      }
+    }
+    if (useAdj) applyEffects(im, w, h, adj, { scale:1, seed:11 });
+    x.putImageData(im, 0, 0);
+  }
+  return st && (st.w > 0) || sh && sh.on ? decorate(c, st || defStroke(), sh || defShadow()) : c;
+}
+function layerCanvas(L) {                      // обработанная картинка слоя (кэш по параметрам)
+  const sig = JSON.stringify([L.imgId, L.adj, L.key, L.stroke, L.shadow]);
+  if (L._sig !== sig || !L._proc) { L._proc = processImage(L.img, L.iw, L.ih, L.adj, L.key, L.stroke, L.shadow); L._sig = sig; }
+  return L._proc;
+}
+function bgSource(f) {
+  if (adjIsDefault(f.bgAdj)) return f.bgImg;
+  const sig = JSON.stringify([f.imgId, f.bgAdj]);
+  if (f._bgSig !== sig || !f._bgProc) { f._bgProc = processImage(f.bgImg, f.bgImg.width, f.bgImg.height, f.bgAdj, null); f._bgSig = sig; }
+  return f._bgProc;
+}
+function readPixel(L, u, v) {                  // цвет пикселя исходного изображения
+  const c = document.createElement('canvas'); c.width = c.height = 1;
+  const x = c.getContext('2d', { willReadFrequently:true });
+  x.drawImage(L.img, -Math.floor(u), -Math.floor(v)); return x.getImageData(0, 0, 1, 1).data;
+}
+function autoKey(L) {                          // цвет фона = средний цвет четырёх углов
+  const pts = [[0,0], [L.iw-1,0], [0,L.ih-1], [L.iw-1,L.ih-1]].map(([u, v]) => readPixel(L, u, v));
+  if (pts.every(q => q[3] < 10)) { alert('У этого изображения фон уже прозрачный.'); return false; }
+  const avg = [0, 1, 2].map(i => pts.reduce((a, q) => a + q[i], 0) / 4);
+  L.key.color = rgbHex(...avg); L.key.on = true; return true;
+}
+function doPick(p) {                           // пипетка: клик по картинке в кадре
+  const L = selImg(F()); pickMode = false; view.style.cursor = '';
+  if (L && L.img) {
+    const { u, v } = layerLocal(L, p);
+    if (u >= 0 && v >= 0 && u < L.iw && v < L.ih) { const q = readPixel(L, u, v); L.key.color = rgbHex(q[0], q[1], q[2]); L.key.on = true; }
+  }
+  renderProps(); draw(); afterChange();
+}
+
+/* ---- выбор / перерисовка ---- */
+function setSel(id) { if (sel === id) return; sel = id; pickMode = false; renderLayersUI(); $('layerProps').scrollTop = 0; draw(); }
+function renderLayersUI() { renderLayerList(); renderProps(); updateHint(); }
+let listT, rafId = 0;
+const listSoon = () => { clearTimeout(listT); listT = setTimeout(renderLayerList, 220); };
+function requestDraw() {                       // изменение параметров слоя (ползунки): рисуем не чаще кадра анимации
+  if (!rafId) rafId = requestAnimationFrame(() => { rafId = 0; draw(); });
+  afterChange(); listSoon();
+}
+function fitThumb(c, src) {
+  const x = c.getContext('2d'); x.clearRect(0, 0, c.width, c.height); if (!src) return;
+  const k = Math.min(c.width / src.width, c.height / src.height), w = src.width * k, h = src.height * k;
+  x.imageSmoothingQuality = 'high'; x.drawImage(src, (c.width - w) / 2, (c.height - h) / 2, w, h);
+}
+let _fxIcon = null;
+function fxIcon() {
+  if (_fxIcon) return _fxIcon;
+  const c = document.createElement('canvas'); c.width = 36; c.height = 28; const x = c.getContext('2d');
+  const g = x.createRadialGradient(18, 14, 3, 18, 14, 22); g.addColorStop(0, '#d8d8d8'); g.addColorStop(1, '#111');
+  x.fillStyle = g; x.fillRect(0, 0, 36, 28); return _fxIcon = c;
+}
+function renderLayerList() {
+  const f = F(), box = $('layerList'), has = f.hasBg;
+  box.innerHTML = '';
+  if (!has) { box.innerHTML = '<div class="empty">Слои появятся, когда в кадре есть скриншот.<br>Загрузите его кнопкой над кадром.</div>'; return; }
+  const mk = (id, name, src, o = {}) => {
+    const d = document.createElement('div'); d.className = 'li' + (sel === id ? ' sel' : '') + (o.hidden ? ' hid' : '');
+    d.innerHTML = (o.eye ? `<button class="eye" title="Показать / скрыть">${o.hidden ? '○' : '●'}</button>` : '<span style="width:22px;flex:none"></span>')
+      + `<canvas width="36" height="28"></canvas><span class="nm" title="${esc(name)}">${esc(name)}</span>`
+      + (o.move ? '<button class="up" title="Выше">↑</button><button class="dn" title="Ниже">↓</button>' : '')
+      + '<button class="cp" title="Копировать в другие кадры…">⎘</button>'
+      + (o.dup ? '<button class="dp" title="Дублировать">⧉</button>' : '') + (o.del ? '<button class="rm x" title="Удалить">✕</button>' : '');
+    fitThumb(d.querySelector('canvas'), src);
+    d.onclick = () => setSel(id);
+    d.querySelector('.cp').onclick = e => { e.stopPropagation(); openCopy([id]); };
+    return d;
+  };
+  [...f.layers].reverse().forEach(L => {
+    const isT = L.kind === 'text', isFx = L.kind === 'fx';
+    const d = mk(L.id, isT ? 'Текст (реплики)' : (L.name || (isFx ? 'Эффекты' : 'Изображение')), isT ? curText : isFx ? fxIcon() : (L.img ? layerCanvas(L) : null),
+      { eye:true, hidden:!L.visible, move:true, dup:!isT, del:!isT });
+    d.querySelector('.eye').onclick = e => { e.stopPropagation(); L.visible = !L.visible; renderLayerList(); draw(); afterChange(); };
+    d.querySelector('.up').onclick = e => { e.stopPropagation(); moveLayer(L, 1); };
+    d.querySelector('.dn').onclick = e => { e.stopPropagation(); moveLayer(L, -1); };
+    const dp = d.querySelector('.dp'), rm = d.querySelector('.rm');
+    if (dp) dp.onclick = e => { e.stopPropagation(); dupLayer(L); };
+    if (rm) rm.onclick = e => { e.stopPropagation(); delLayer(L.id); };
+    box.appendChild(d);
+  });
+  box.appendChild(mk('bg', 'Фон (скриншот)', f.bgImg));
+}
+function moveLayer(L, dir) {
+  const a = F().layers, i = a.indexOf(L), j = i + dir; if (j < 0 || j >= a.length) return;
+  [a[i], a[j]] = [a[j], a[i]]; renderLayerList(); draw(); afterChange();
+}
+function cloneLayer(L) {
+  const n = { ...L, id: L.kind === 'text' ? 'text' : uid(), _proc:null, _sig:'' };
+  for (const k of ['adj', 'key', 'stroke', 'shadow', 'border', 'region']) if (L[k]) n[k] = { ...L[k] };
+  return n;
+}
+function dupLayer(L) {
+  const a = F().layers, n = cloneLayer(L); n.name = (L.name || '') + ' (копия)';
+  if (L.kind === 'img') { n.cx += 24; n.cy += 24; }
+  a.splice(a.indexOf(L) + 1, 0, n); sel = n.id; renderLayersUI(); draw(); afterChange();
+}
+function delLayer(id) {
+  const f = F(), i = f.layers.findIndex(l => l.id === id); if (i < 0 || f.layers[i].kind === 'text') return;
+  f.layers.splice(i, 1); if (sel === id) sel = 'text'; renderLayersUI(); draw(); afterChange();
+}
+
+/* ---- панель свойств ---- */
+function htmlEl(html) { const d = document.createElement('div'); d.innerHTML = html.trim(); return d.firstElementChild; }
+function addSlider(box, label, min, max, def, get, set, step = 1) {
+  const r = htmlEl(`<div class="srow"><label title="Двойной клик — сбросить">${label}</label><input type="range" min="${min}" max="${max}" step="${step}"><input type="number" min="${min}" max="${max}" step="${step}"></div>`);
+  const [rg, nm] = r.querySelectorAll('input'); rg.value = nm.value = step < 1 ? Math.round(get() * 10) / 10 : Math.round(get());
+  rg.oninput = () => { nm.value = rg.value; set(+rg.value); };
+  nm.oninput = () => { if (nm.value === '' || isNaN(+nm.value)) return; rg.value = nm.value; set(+nm.value); };
+  r.querySelector('label').ondblclick = () => { rg.value = nm.value = def; set(def); };
+  box.appendChild(r);
+}
+function addBtn(box, text, fn, cls = '') {
+  const b = document.createElement('button'); b.className = 'sm ' + cls; b.textContent = text; b.onclick = fn; box.appendChild(b); return b;
+}
+const FX_PRESETS = [
+  ['Ч/Б', { bw:100 }],
+  ['Ч/Б контраст', { bw:100, con:35 }],
+  ['Резкий Ч/Б', { bw:100, con:70, sharp:80, bri:-6, grain:10 }],
+  ['Зерно', { grain:45, gsize:2 }],
+  ['Размытие', { blur:8 }],
+  ['Нуар', { bw:100, con:45, bri:-8, fade:6, vig:60, vsize:35, grain:22, gsize:1, sharp:20 }],
+  ['Сепия', { sepia:100, con:10 }],
+  ['Старое фото', { sepia:85, fade:28, con:-5, grain:35, gsize:2, vig:45, vsize:40 }],
+  ['Холодный', { temp:-45, sat:-10, con:10 }],
+  ['Тёплый', { temp:40, sat:8 }],
+  ['Контраст+', { con:45, sat:15 }],
+  ['Выцветший', { fade:35, sat:-25, con:-10 }],
+];
+function colorGroup(g, adj) {
+  const sh = t => g.appendChild(htmlEl(`<div style="margin:10px 0 4px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">${t}</div>`));
+  sh('Готовые стили');
+  const pr = htmlEl('<div class="brow" style="margin-top:0"></div>');
+  for (const [name, pset] of FX_PRESETS) addBtn(pr, name, () => { Object.assign(adj, defAdj(), pset); renderProps(); requestDraw(); });
+  g.appendChild(pr);
+  sh('Цвет');
+  addSlider(g, 'Яркость', -100, 100, 0, () => adj.bri, v => { adj.bri = v; requestDraw(); });
+  addSlider(g, 'Контраст', -100, 100, 0, () => adj.con, v => { adj.con = v; requestDraw(); });
+  addSlider(g, 'Насыщенность', -100, 100, 0, () => adj.sat, v => { adj.sat = v; requestDraw(); });
+  addSlider(g, 'Оттенок', -180, 180, 0, () => adj.hue, v => { adj.hue = v; requestDraw(); });
+  addSlider(g, 'Температура', -100, 100, 0, () => adj.temp, v => { adj.temp = v; requestDraw(); });
+  const row = htmlEl('<div class="brow"><label class="check" style="margin:0"><input type="checkbox"> Инвертировать</label></div>');
+  const cb = row.querySelector('input'); cb.checked = !!adj.inv; cb.onchange = () => { adj.inv = cb.checked; requestDraw(); };
+  g.appendChild(row);
+  sh('Эффекты');
+  addSlider(g, 'Чёрно-белый', 0, 100, 0, () => adj.bw, v => { adj.bw = clamp(v, 0, 100); requestDraw(); });
+  addSlider(g, 'Сепия', 0, 100, 0, () => adj.sepia, v => { adj.sepia = clamp(v, 0, 100); requestDraw(); });
+  addSlider(g, 'Тонировка', 0, 100, 0, () => adj.tint, v => { adj.tint = clamp(v, 0, 100); requestDraw(); });
+  const tc = htmlEl('<div class="brow"><span style="font-size:12px;color:var(--muted)">Цвет тонировки:</span><input type="color"></div>');
+  const ti = tc.querySelector('input'); ti.value = adj.tintC || '#b0803c';
+  ti.oninput = () => { adj.tintC = ti.value; if (!adj.tint) { adj.tint = 60; renderProps(); } requestDraw(); };
+  g.appendChild(tc);
+  addSlider(g, 'Выцветание', 0, 100, 0, () => adj.fade, v => { adj.fade = clamp(v, 0, 100); requestDraw(); });
+  addSlider(g, 'Виньетка', 0, 100, 0, () => adj.vig, v => { adj.vig = clamp(v, 0, 100); requestDraw(); });
+  addSlider(g, 'Размер виньетки', 0, 100, 50, () => adj.vsize, v => { adj.vsize = clamp(v, 0, 100); requestDraw(); });
+  addSlider(g, 'Зерно', 0, 100, 0, () => adj.grain, v => { adj.grain = clamp(v, 0, 100); requestDraw(); });
+  addSlider(g, 'Крупность зерна', 1, 4, 1, () => adj.gsize, v => { adj.gsize = clamp(v, 1, 4); requestDraw(); });
+  addSlider(g, 'Размытие, px', 0, 30, 0, () => adj.blur, v => { adj.blur = clamp(v, 0, 30); requestDraw(); });
+  addSlider(g, 'Резкость', 0, 100, 0, () => adj.sharp, v => { adj.sharp = clamp(v, 0, 100); requestDraw(); });
+  const rs = htmlEl('<div class="brow"></div>');
+  addBtn(rs, 'Сбросить цвет и эффекты', () => { Object.assign(adj, defAdj()); renderProps(); requestDraw(); });
+  g.appendChild(rs);
+}
+function colorRow(g, label, get, set) {
+  const r = htmlEl(`<div class="brow"><span style="font-size:12px;color:var(--muted)">${label}</span><input type="color"></div>`);
+  const i = r.querySelector('input'); i.value = get(); i.oninput = () => { set(i.value); requestDraw(); }; g.appendChild(r);
+}
+function renderProps() {
+  const box = $('layerProps'); box.innerHTML = ''; const f = F(); if (!f.hasBg) return;
+  const grp = title => { const g = htmlEl(`<div class="pgroup"><h3>${title}</h3></div>`); box.appendChild(g); return g; };
+  if (sel === 'text') {
+    const setC = (id, v) => { const e = $(id); e.type === 'checkbox' ? e.checked = !!v : e.value = v; };
+    const apply = o => { for (const [k, v] of Object.entries(o)) setC(k, v); render(); renderProps(); };
+    const numC = (g, label, id, min, max, def, step = 1) => addSlider(g, label, min, max, def, () => +$(id).value || 0, v => { $(id).value = v; render(); }, step);
+    const colC = (g, label, id) => { const r = htmlEl(`<div class="brow"><span style="font-size:12px;color:var(--muted)">${label}</span><input type="color"></div>`);
+      const i = r.querySelector('input'); i.value = $(id).value; i.oninput = () => { $(id).value = i.value; render(); }; g.appendChild(r); };
+    const selC = (g, label, id) => { const src = $(id), r = htmlEl(`<div class="srow" style="grid-template-columns:105px 1fr"><label>${label}</label><select>${src.innerHTML}</select></div>`);
+      const i = r.querySelector('select'); i.value = src.value; i.onchange = () => { src.value = i.value; render(); }; g.appendChild(r); };
+    let g = grp('Обводка букв');
+    const pr = htmlEl('<div class="brow" style="margin-top:0"></div>');
+    const OL0 = { outline:1, olColor:'#000000', olOp:100, olBlur:0, olStyle:'pixel', olJoin:'round' };
+    addBtn(pr, 'Как в игре', () => apply({ ...OL0, shOn:false }));
+    addBtn(pr, 'Жирная', () => apply({ ...OL0, outline:2, olStyle:'vector' }));
+    addBtn(pr, 'Тонкая', () => apply({ ...OL0, outline:0.6, olStyle:'vector' }));
+    addBtn(pr, 'Белая', () => apply({ ...OL0, outline:1.5, olColor:'#ffffff', olStyle:'vector' }));
+    addBtn(pr, 'Свечение', () => apply({ ...OL0, outline:1, olStyle:'vector', olColor:'#ffd24a', olBlur:4 }));
+    addBtn(pr, 'Без обводки', () => apply({ outline:0 }));
+    g.appendChild(pr);
+    numC(g, 'Толщина, px', 'outline', 0, 10, 1, 0.5);
+    colC(g, 'Цвет обводки:', 'olColor');
+    numC(g, 'Прозрачность, %', 'olOp', 0, 100, 100);
+    numC(g, 'Свечение, px', 'olBlur', 0, 10, 0, 0.5);
+    selC(g, 'Стиль', 'olStyle'); selC(g, 'Углы', 'olJoin');
+    g = grp('Тень текста');
+    const sr = htmlEl('<div class="brow"><label class="check" style="margin:0"><input type="checkbox"> Включить тень</label></div>');
+    const sc = sr.querySelector('input'); sc.checked = $('shOn').checked; sc.onchange = () => { $('shOn').checked = sc.checked; render(); }; g.appendChild(sr);
+    colC(g, 'Цвет тени:', 'shColor');
+    numC(g, 'Сдвиг X, px', 'shDx', -20, 20, 2); numC(g, 'Сдвиг Y, px', 'shDy', -20, 20, 2);
+    numC(g, 'Размытие, px', 'shBlur', 0, 20, 2); numC(g, 'Плотность, %', 'shOp', 0, 100, 70);
+    grp('Текст кадра').insertAdjacentHTML('beforeend', '<div class="hint" style="margin:0">Тащите текст мышью; синие квадраты на рамке меняют ширину переноса и размер. Обводка и тень общие для всех кадров. «Пиксельная» обводка повторяет игровую, «Контур» — сглаженная и может быть дробной толщины. Стрелками ↑ ↓ в списке слой можно поставить выше или ниже изображений и эффектов, «●» скрывает его, «⎘» копирует текст в другие кадры.</div>');
+    return;
+  }
+  if (sel === 'bg') { colorGroup(grp('Цвет и эффекты фона'), f.bgAdj); return; }
+  const X = f.layers.find(l => l.id === sel); if (!X) return;
+  const nameRow = () => {
+    const r = htmlEl('<div class="srow" style="grid-template-columns:105px 1fr"><label>Название</label><input type="text"></div>');
+    const ni = r.querySelector('input'); ni.value = X.name; ni.oninput = () => { X.name = ni.value; listSoon(); afterChange(); }; return r;
+  };
+  if (X.kind === 'fx') {
+    let g = grp('Эффекты кадра');
+    g.insertAdjacentHTML('beforeend', '<div class="hint" style="margin:0 0 8px">Действуют на всё, что ниже этого слоя в списке (фон и изображения), только внутри кадра. Текст, если он выше в списке, остаётся чётким. Стрелками можно выбрать, что затронуть.</div>');
+    g.appendChild(nameRow());
+    addSlider(g, 'Сила эффекта', 0, 100, 100, () => X.op, v => { X.op = clamp(v, 0, 100); requestDraw(); });
+    colorGroup(g, X.adj);
+    const R = X.region;
+    g = grp('Область действия');
+    g.insertAdjacentHTML('beforeend', '<div class="hint" style="margin:0 0 8px">Эффект можно применить не ко всему кадру, а к его части — например, размыть лицо или номер, добавить зерно в уголок. Область двигается мышью на кадре (бирюзовая рамка), края тянутся.</div>');
+    const md = htmlEl('<div class="srow" style="grid-template-columns:105px 1fr"><label>Где</label><select><option value="all">Весь кадр</option><option value="rect">Прямоугольник</option><option value="ellipse">Эллипс</option></select></div>');
+    const ms = md.querySelector('select'); ms.value = R.mode;
+    ms.onchange = () => {
+      R.mode = ms.value;
+      if (R.mode !== 'all' && !(R.w > 0 && R.h > 0)) Object.assign(R, { x:Math.round(f.W / 4), y:Math.round(f.H / 4), w:Math.round(f.W / 2), h:Math.round(f.H / 2) });
+      renderProps(); requestDraw();
+    };
+    g.appendChild(md);
+    if (R.mode !== 'all') {
+      addSlider(g, 'X', -f.W, f.W * 2, 0, () => R.x, v => { R.x = v; requestDraw(); });
+      addSlider(g, 'Y', -f.H, f.H * 2, 0, () => R.y, v => { R.y = v; requestDraw(); });
+      addSlider(g, 'Ширина', 10, Math.max(200, f.W * 2), 200, () => R.w, v => { R.w = Math.max(10, v); requestDraw(); });
+      addSlider(g, 'Высота', 10, Math.max(200, f.H * 2), 200, () => R.h, v => { R.h = Math.max(10, v); requestDraw(); });
+      addSlider(g, 'Мягкость края', 0, 200, 24, () => R.feather, v => { R.feather = Math.max(0, v); requestDraw(); });
+      const iv = htmlEl('<div class="brow"><label class="check" style="margin:0"><input type="checkbox"> Наоборот: всё, кроме области</label></div>');
+      const ic = iv.querySelector('input'); ic.checked = R.inv; ic.onchange = () => { R.inv = ic.checked; requestDraw(); };
+      g.appendChild(iv);
+    }
+    g = grp('Рамка кадра');
+    addSlider(g, 'Толщина, px', 0, 60, 0, () => X.border.w, v => { X.border.w = clamp(v, 0, 200); requestDraw(); });
+    colorRow(g, 'Цвет рамки:', () => X.border.color, v => { X.border.color = v; });
+    return;
+  }
+  const L = X; if (L.kind !== 'img') return;
+  let g = grp('Слой');
+  g.appendChild(nameRow());
+  addSlider(g, 'Прозрачность', 0, 100, 100, () => L.op, v => { L.op = clamp(v, 0, 100); requestDraw(); });
+  const bl = htmlEl(`<div class="srow" style="grid-template-columns:105px 1fr"><label>Наложение</label><select>${BLENDS.map(([k, n]) => `<option value="${k}">${n}</option>`).join('')}</select></div>`);
+  const bs = bl.querySelector('select'); bs.value = L.blend; bs.onchange = () => { L.blend = bs.value; requestDraw(); };
+  g.appendChild(bl);
+
+  g = grp('Положение и размер');
+  addSlider(g, 'Масштаб, %', 2, 300, 100, () => L.s * 100, v => { L.s = clamp(v / 100, 0.02, 30); requestDraw(); });
+  addSlider(g, 'Поворот, °', -180, 180, 0, () => L.rot, v => { L.rot = clamp(v, -180, 180); requestDraw(); });
+  const tr = htmlEl('<div class="brow"></div>');
+  addBtn(tr, 'Отразить', () => { L.flip = !L.flip; requestDraw(); }, '');
+  addBtn(tr, 'В центр кадра', () => { L.cx = f.fx + f.W / 2; L.cy = f.fy + f.H / 2; requestDraw(); });
+  addBtn(tr, 'Вписать в кадр', () => { L.s = Math.min(f.W / L.iw, f.H / L.ih); L.cx = f.fx + f.W / 2; L.cy = f.fy + f.H / 2; renderProps(); requestDraw(); });
+  g.appendChild(tr);
+
+  g = grp('Обводка и тень');
+  addSlider(g, 'Обводка, px', 0, 40, 0, () => L.stroke.w, v => { L.stroke.w = clamp(v, 0, 60); requestDraw(); });
+  colorRow(g, 'Цвет обводки:', () => L.stroke.color, v => { L.stroke.color = v; });
+  const sr = htmlEl('<div class="brow"><label class="check" style="margin:0"><input type="checkbox"> Тень</label></div>');
+  const sc = sr.querySelector('input'); sc.checked = L.shadow.on; sc.onchange = () => { L.shadow.on = sc.checked; requestDraw(); };
+  g.appendChild(sr);
+  colorRow(g, 'Цвет тени:', () => L.shadow.color, v => { L.shadow.color = v; L.shadow.on = true; sc.checked = true; });
+  addSlider(g, 'Размытие тени', 0, 40, 8, () => L.shadow.blur, v => { L.shadow.blur = clamp(v, 0, 80); requestDraw(); });
+  addSlider(g, 'Смещение X', -50, 50, 4, () => L.shadow.dx, v => { L.shadow.dx = clamp(v, -200, 200); requestDraw(); });
+  addSlider(g, 'Смещение Y', -50, 50, 4, () => L.shadow.dy, v => { L.shadow.dy = clamp(v, -200, 200); requestDraw(); });
+  addSlider(g, 'Плотность тени', 0, 100, 60, () => L.shadow.op, v => { L.shadow.op = clamp(v, 0, 100); requestDraw(); });
+
+  colorGroup(grp('Цвет и эффекты'), L.adj);
+
+  g = grp('Удаление фона');
+  const k = L.key;
+  const on = htmlEl('<div class="brow"><label class="check" style="margin:0"><input type="checkbox"> Убрать фон</label></div>');
+  const onCb = on.querySelector('input'); onCb.checked = k.on;
+  onCb.onchange = () => { k.on = onCb.checked; requestDraw(); };
+  addBtn(on, 'Авто (по углам)', () => { if (autoKey(L)) { renderProps(); requestDraw(); } }, 'primary');
+  g.appendChild(on);
+  const cr = htmlEl('<div class="brow"><span style="font-size:12px;color:var(--muted)">Цвет фона:</span><input type="color"></div>');
+  const ci = cr.querySelector('input'); ci.value = k.color; ci.oninput = () => { k.color = ci.value; k.on = true; onCb.checked = true; requestDraw(); };
+  const pk = addBtn(cr, pickMode ? 'Кликните по картинке…' : 'Пипетка', () => { pickMode = !pickMode; pk.textContent = pickMode ? 'Кликните по картинке…' : 'Пипетка'; view.style.cursor = pickMode ? 'crosshair' : ''; });
+  g.appendChild(cr);
+  const md = htmlEl('<div class="srow" style="grid-template-columns:105px 1fr"><label>Что убирать</label><select><option value="all">Все пиксели этого цвета</option><option value="edge">Только фон вокруг (от краёв)</option></select></div>');
+  const ms = md.querySelector('select'); ms.value = k.mode; ms.onchange = () => { k.mode = ms.value; requestDraw(); };
+  g.appendChild(md);
+  addSlider(g, 'Допуск', 0, 100, 15, () => k.tol, v => { k.tol = clamp(v, 0, 100); requestDraw(); });
+  addSlider(g, 'Мягкость края', 0, 100, 10, () => k.soft, v => { k.soft = clamp(v, 0, 100); requestDraw(); });
+}
+
+/* ---- добавление изображений ---- */
+async function addLayerFiles(files) {
+  const f = F(); if (!f.hasBg) return;
+  files = [...files].filter(x => x.type.startsWith('image/')); if (!files.length) return;
+  for (const file of files) {
+    const id = await putImage(file), img = await createImageBitmap(file);
+    const L = { kind:'img', id:uid(), name:file.name.replace(/\.[^.]+$/, ''), imgId:id, img, iw:img.width, ih:img.height,
+      cx:f.fx + f.W / 2, cy:f.fy + f.H / 2, s:Math.min(1, f.W * 0.5 / img.width, f.H * 0.6 / img.height), rot:0, flip:false,
+      visible:true, op:100, blend:'source-over', adj:defAdj(), key:defKey(), stroke:defStroke(), shadow:defShadow() };
+    f.layers.splice(f.layers.findIndex(l => l.kind === 'text'), 0, L);   // новый слой — под текстом
+    sel = L.id;
+  }
+  renderLayersUI(); fit(); draw(); afterChange();
+}
+function addFx() {
+  const f = F(); if (!f.hasBg) return;
+  const L = { kind:'fx', id:uid(), name:'Эффекты', visible:true, op:100, adj:{ ...defAdj(), bw:100, con:25 }, border:{ w:0, color:'#000000' }, region:{ mode:'all', x:0, y:0, w:0, h:0, feather:24, inv:false } };
+  f.layers.splice(f.layers.findIndex(l => l.kind === 'text'), 0, L); sel = L.id;
+  renderLayersUI(); draw(); afterChange();
+}
+$('addFx').onclick = addFx;
+$('addLayer').onclick = () => $('layerFile').click();
+$('layerFile').onchange = e => { addLayerFiles(e.target.files); e.target.value = ''; };
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && pickMode) { pickMode = false; view.style.cursor = ''; renderProps(); return; }
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName) || !curSit) return;
+  const f = F(); if (!f || !f.hasBg) return;
+  const L = selImg(f);
+  if ((e.key === 'Delete' || e.key === 'Backspace') && L) { delLayer(L.id); e.preventDefault(); return; }
+  const st = e.shiftKey ? 10 : 1, dir = { ArrowLeft:[-st, 0], ArrowRight:[st, 0], ArrowUp:[0, -st], ArrowDown:[0, st] }[e.key];
+  if (!dir) return;
+  if (L) { L.cx += dir[0]; L.cy += dir[1]; } else if (sel === 'text') { f.tx += dir[0]; f.ty += dir[1]; } else if (sel === 'bg') { f.bx += dir[0]; f.by += dir[1]; } else return;
+  e.preventDefault(); syncGeo(); draw(); afterChange();
+});
+
+/* ================= КАДРЫ (плитки справа) ================= */
+const tilesEl = $('tiles');
+function renderTiles() {
+  tilesEl.innerHTML = '';
+  frames.forEach((f, i) => {
+    const d = document.createElement('div'); d.className = 'tile' + (i === active ? ' active' : '');
+    d.innerHTML = `<canvas width="160" height="40"></canvas>
+      <div class="meta"><span class="nm" title="Двойной клик — переименовать">${esc(f.name)}</span>
+      <button class="dup" title="Дублировать">⧉</button><button class="del x" title="Удалить">✕</button></div>`;
+    d.onclick = () => { if (i !== active) switchTo(i); };
+    d.querySelector('.nm').ondblclick = e => {
+      e.stopPropagation(); const n = prompt('Название кадра', f.name);
+      if (n && n.trim()) { f.name = n.trim(); renderTiles(); if (i === active) $('frameTitle').textContent = f.name; save(); }
+    };
+    d.querySelector('.dup').onclick = e => { e.stopPropagation(); dupFrame(i); };
+    d.querySelector('.del').onclick = e => { e.stopPropagation(); delFrame(i); };
+    tilesEl.appendChild(d);
+  });
+  thumbAll();
+}
+function drawThumb(i) {
+  const f = frames[i], tile = tilesEl.children[i]; if (!tile || !curText) return;
+  const c = tile.querySelector('canvas'), t = i === active ? curText : makeTextCanvas(f.rows, f);
+  const maxW = 160, maxH = 110;
+  let k, w, h;
+  if (f.hasBg && f.bgImg) { k = Math.min(maxW / f.W, maxH / f.H); w = Math.max(1, Math.round(f.W*k)); h = Math.max(1, Math.round(f.H*k)); }
+  else { k = Math.min(1, maxW / t.width); w = Math.max(1, Math.round(t.width*k)); h = Math.max(1, Math.round(t.height*k)); }
+  c.width = w; c.height = h;
+  const x = c.getContext('2d'); x.imageSmoothingQuality = 'high';
+  if (f.hasBg && f.bgImg) composeFrame(x, f, k, t); else x.drawImage(t, 0, 0, w, h);
+}
+const thumbAll = () => frames.forEach((_, i) => drawThumb(i));
+function switchTo(i, keepRows) {
+  if (!keepRows && frames[active]) frames[active].rows = getRows();
+  active = Math.min(i, frames.length - 1); sel = 'text'; pickMode = false; viewZoom = null;
+  buildRowsUI();
+  [...tilesEl.children].forEach((t, j) => t.classList.toggle('active', j === active));
+  applyFrame(); renderLayersUI(); thumbAll(); save();
+}
+function addFrame() {
+  F().rows = getRows();
+  frames.push(newFrame([{ type:'me', text:'', act:'', color:'#ffff00', nick:'' }]));
+  active = frames.length - 1; renderTiles(); renderSitTabs(); switchTo(active, true);
+}
+function dupFrame(i) {
+  if (i === active) F().rows = getRows();
+  const s = frames[i], n = { ...s, name: s.name + ' (копия)', rows: JSON.parse(JSON.stringify(s.rows)), bgAdj:{ ...s.bgAdj }, _bgProc:null, _bgSig:'' };
+  n.layers = s.layers.map(cloneLayer);
+  frames.splice(i + 1, 0, n); active = i + 1; renderTiles(); renderSitTabs(); switchTo(active, true);
+}
+function delFrame(i) {
+  if (frames.length === 1) { alert('Нельзя удалить единственный кадр.'); return; }
+  if (!confirm(`Удалить «${frames[i].name}»?`)) return;
+  frames[active].rows = getRows();
+  const cur = frames[active];
+  frames.splice(i, 1);
+  active = frames.includes(cur) ? frames.indexOf(cur) : Math.min(i, frames.length - 1);
+  renderTiles(); renderSitTabs(); switchTo(active, true);
+}
+$('addFrame').onclick = addFrame;
+
+/* ================= РЕНДЕР / СОХРАНЕНИЕ ================= */
+function updateNickList() {
+  const set = new Set([mainWho()]);
+  (curSit.players || []).forEach(p => { if (p.nick) set.add(p.pid ? `${p.nick}[${p.pid}]` : p.nick); });
+  frames.forEach(f => f.rows.forEach(r => { if (r.nick && r.nick.trim()) set.add(r.nick.trim()); }));
+  $('nicks').innerHTML = [...set].map(n => `<option value="${esc(n)}">`).join('');
+  const sf = new Set(['по телефону', 'по рации', 'в рацию', 'шёпотом', 'кричит', 'по громкой связи', 'через мегафон', '{глагол} по телефону']);
+  frames.forEach(f => f.rows.forEach(r => { if (r.sfx && r.sfx.trim()) sf.add(r.sfx.trim()); }));
+  $('sfxList').innerHTML = [...sf].map(n => `<option value="${esc(n)}">`).join('');
+  rowsEl.querySelectorAll('.sc').forEach(i => { if (!i.dataset.set) i.value = $('cSay').value; });
+  rowsEl.querySelectorAll('.sx').forEach(i => i.placeholder = `Вместо глагола: по телефону, по рации… (пусто — «${verbFor(curSit, 'm')}»)`);
+  rowsEl.querySelectorAll('.row').forEach(r => { const i = r.querySelector('.nk'); if (i) i.placeholder = r.dataset.type === 'do' ? nickPhDo() : nickPh(); });
+}
+function syncTc() {                            // «Цвет всех реплик» — показать состояние активного кадра
+  const f = F(), set = (id, fn) => { if (document.activeElement !== $(id)) fn($(id)); };
+  set('tcOn', e => e.checked = !!f.tcolor); set('tcVal', e => e.value = f.tcolor || '#ffffff'); set('tcFor', e => e.value = f.tfor || 'all');
+}
+function tcChange() {
+  const f = F(); f.tcolor = $('tcOn').checked ? $('tcVal').value : ''; f.tfor = $('tcFor').value;
+  render();
+}
+$('tcOn').onchange = tcChange; $('tcFor').onchange = tcChange;
+$('tcVal').oninput = () => { $('tcOn').checked = true; tcChange(); };
+$('tcAll').onclick = () => {
+  tcChange(); const c = F().tcolor, t = F().tfor;
+  frames.forEach(fr => { fr.tcolor = c; fr.tfor = t; }); renderTiles(); save();
+  toast(c ? `Цвет реплик применён ко всем кадрам ситуации (${frames.length})` : 'Единый цвет реплик отключён во всех кадрах ситуации');
+};
+function applyFrame() {
+  curText = makeTextCanvas(F().rows, F());
+  $('frameTitle').textContent = F().name; if (document.activeElement !== $('frameName')) $('frameName').value = F().name;
+  syncTc();
+  $('pv').classList.toggle('dark', $('darkbg').checked);
+  syncGeo(); fit(); draw(); updateNickList();
+}
+function render() {                       // изменился текст/настройки
+  if (building || !curSit) return;
+  F().rows = getRows();
+  applyFrame(); afterChange();
+}
+let thumbT, saveT, gcT;
+function afterChange() {
+  clearTimeout(thumbT); thumbT = setTimeout(() => drawThumb(active), 120);
+  save();
+}
+ctrl.forEach(k => { $(k).oninput = render; $(k).onchange = render; });
+
+function save(now) {
+  clearTimeout(saveT);
+  saveT = setTimeout(async () => {
+    if (!curSit) return;
+    flushState();
+    const data = { v:2, settings:readSettings(), sa:sits.indexOf(curSit), sits:sits.map(sitMeta) };
+    if (Auth.blocked) return;
+    setSaveState('saving');
+    try { await DB.set('kv', 'project', data); setSaveState('saved'); }
+    catch (e) {
+      if (e.status === 409) {                                   // тот же аккаунт открыт в другой вкладке / на другом устройстве
+        setSaveState('error');
+        if (confirm('Данные в аккаунте были изменены в другой вкладке или на другом устройстве.\n\nОК — перезаписать их текущей версией.\nОтмена — загрузить версию с сервера (несохранённые изменения здесь пропадут).')) { projectRev = e.data.rev; save(true); }
+        else { Auth.blocked = true; location.reload(); }
+      } else if (e.status !== 401) { console.warn('save failed', e); setSaveState('error'); saveT = setTimeout(() => save(), 5000); }
+      return;
+    }
+    clearTimeout(gcT); gcT = setTimeout(() => { gcImages(); updateStorage(); }, 4000);
+  }, now ? 0 : 500);
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) save(true); });
+window.addEventListener('pagehide', () => save(true));
+
+async function gcImages() {                // удалить картинки, на которые больше никто не ссылается
+  try {
+    const keys = await DB.keys('img');
+    const used = new Set(); sits.forEach(s => s.frames.forEach(f => { if (f.imgId) used.add(f.imgId); f.layers.forEach(L => L.imgId && used.add(L.imgId)); }));
+    for (const k of keys) {
+      if (used.has(k) || Date.now() - (recentImgs.get(k) || 0) < 60000) continue;
+      await DB.del('img', k);
+    }
+  } catch {}
+}
+async function updateStorage() {
+  try {
+    const u = await API.json('GET', '/api/usage'), mb = n => (n / 1048576).toFixed(n < 10485760 ? 1 : 0);
+    $('storInfo').textContent = `Хранилище: ${mb(u.used)} из ${Math.round(u.quota / 1048576)} МБ`;
+    $('storInfo').title = `В аккаунте: ситуаций — ${u.situations}, картинок — ${u.images}`;
+  } catch { $('storInfo').textContent = ''; }
+}
+
+/* ---- экспорт / импорт (резервная копия в файл) ---- */
+async function exportSits(list, name) {
+  flushState();
+  const out = { app:'samp-chat', v:2, situations:[] };
+  for (const s of list) {
+    const m = sitMeta(s);
+    for (const f of m.frames) {
+      f.imgData = '';
+      if (f.hasBg && f.imgId) { const b = await DB.get('img', f.imgId); if (b) f.imgData = await readFile(b); }
+      delete f.imgId;
+      for (const L of f.layers) if (L.kind === 'img') {
+        const b = L.imgId && await DB.get('img', L.imgId); L.imgData = b ? await readFile(b) : ''; delete L.imgId;
+      }
+    }
+    out.situations.push(m);
+  }
+  downloadBlob(new Blob([JSON.stringify(out)], { type:'application/json' }), name + '.json');
+}
+$('expAll').onclick = () => exportSits(sits, 'samp-chat-проект');
+$('sitExp').onclick = () => exportSits([curSit], 'samp-chat-' + safe(curSit.name));
+$('impBtn').onclick = () => $('impFile').click();
+$('impFile').onchange = async e => {
+  const file = e.target.files[0]; e.target.value = ''; if (!file) return;
+  try {
+    const d = JSON.parse(await file.text());
+    const list = d.situations || [];
+    if (!list.length) throw new Error('В файле нет ситуаций');
+    flushState();
+    for (const m of list) {
+      const s = normSit({ ...m, id:uid(), frames:[] });
+      for (const fm of m.frames) {
+        const f = { ...newFrame([], s), ...fm, bgImg:null, imgId:'' };
+        if (fm.imgData) { f.imgId = await putImage(dataURLtoBlob(fm.imgData)); f.hasBg = true; } else f.hasBg = false;
+        delete f.imgData;
+        for (const L of f.layers || []) if (L.kind === 'img') { if (L.imgData) L.imgId = await putImage(dataURLtoBlob(L.imgData)); delete L.imgData; }
+        f.layers = (f.layers || []).filter(L => L.kind !== 'img' || L.imgId); normFrame(f); s.frames.push(f);
+      }
+      if (!s.frames.length) s.frames.push(newFrame([], s));
+      sits.push(s);
+    }
+    await switchSit(sits.length - list.length); save(true);
+  } catch (err) { alert('Не удалось импортировать: ' + err.message); }
+};
+
+/* ================= КОПИРОВАНИЕ СЛОЁВ МЕЖДУ КАДРАМИ ================= */
+let CP = null;
+function openCopy(ids) {                       // ids: ['bg'] | ['text'] | [id слоя] | ['*'] — все слои кадра
+  flushState(); CP = { ids };
+  const f = F(), all = ids[0] === '*';
+  const nm = id => id === 'bg' ? 'фон' : id === 'text' ? 'текст' : (f.layers.find(l => l.id === id)?.name || 'слой');
+  $('cpTitle').textContent = all ? `Копировать все слои кадра «${f.name}»` : `Копировать: ${ids.map(nm).join(', ')}`;
+  $('cpOpts').innerHTML = (all || ids.includes('text')
+      ? '<h3 style="margin-top:0">Текст</h3><label class="opt"><input type="radio" name="cpText" value="append" checked> добавить строки в конец кадра</label><label class="opt"><input type="radio" name="cpText" value="replace"> заменить строки (и положение/размер текста)</label>' : '')
+    + (all ? '<h3>Слои</h3><label class="opt"><input type="checkbox" id="cpRepl" checked> заменить фон и слои в кадрах-получателях (иначе добавить сверху)</label><label class="opt"><input type="checkbox" id="cpNoText"> не копировать текст</label>' : '');
+  $('cpTree').innerHTML = sits.map((st, si) => {
+    const head = `<label class="opt" style="margin-top:8px"><input type="checkbox" data-sit="${si}"> <b>${esc(st.name || 'Без названия')}</b>${st === curSit ? ' <span style="color:var(--muted)">(текущая)</span>' : ''} — все кадры</label>`;
+    return head + st.frames.map((fr, fi) => {
+      const me = st === curSit && fi === active;
+      return `<label class="opt" style="margin-left:20px;${me ? 'opacity:.45' : ''}"><input type="checkbox" data-s="${si}" data-f="${fi}" ${me ? 'disabled' : ''}> ${esc(fr.name)}${me ? ' (этот кадр)' : ''}</label>`;
+    }).join('');
+  }).join('');
+  $('cpTree').querySelectorAll('input[data-sit]').forEach(c => c.onchange = () =>
+    $('cpTree').querySelectorAll(`input[data-s="${c.dataset.sit}"]:not(:disabled)`).forEach(x => x.checked = c.checked));
+  $('cpInfo').textContent = '';
+  $('cpModal').style.display = 'flex';
+}
+function copyInto(src, T, live, ids, o) {
+  const all = ids[0] === '*';
+  if ((all || ids.includes('bg')) && src.hasBg) {
+    const hadBg = T.hasBg;
+    Object.assign(T, { hasBg:true, imgId:src.imgId, bgImg:live ? src.bgImg : null, bgAdj:{ ...src.bgAdj }, _bgProc:null, _bgSig:'' });
+    if (!hadBg) Object.assign(T, { fx:src.fx, fy:src.fy, W:src.W, H:src.H });
+    T.bx = src.bx + (T.fx - src.fx); T.by = src.by + (T.fy - src.fy); T.bs = src.bs;
+  }
+  const ox = T.fx - src.fx, oy = T.fy - src.fy;
+  const take = src.layers.filter(l => l.kind !== 'text' && (all || ids.includes(l.id)));
+  const map = new Map(take.map(L => {
+    const n = cloneLayer(L);
+    if (L.kind === 'img') { n.cx = L.cx + ox; n.cy = L.cy + oy; n.img = live ? L.img : null; }
+    return [L, n];
+  }));
+  if (take.length) {
+    if (all && o.repl) {
+      const tt = T.layers.find(l => l.kind === 'text') || TEXT_LAYER();
+      T.layers = src.layers.map(l => l.kind === 'text' ? tt : map.get(l));
+    } else {
+      const ti = T.layers.findIndex(l => l.kind === 'text'); T.layers.splice(ti, 0, ...map.values());
+    }
+  }
+  if ((all && !o.noText) || ids.includes('text')) {
+    const rows = JSON.parse(JSON.stringify(src.rows));
+    if (o.textMode === 'replace') { T.rows = rows; Object.assign(T, { tx:src.tx, ty:src.ty, tw:src.tw, ts:src.ts, tcolor:src.tcolor, tfor:src.tfor }); }
+    else T.rows = [...T.rows.filter(r => r.text.trim() || r.act.trim()), ...rows];
+    const st = src.layers.find(l => l.kind === 'text'), tt = T.layers.find(l => l.kind === 'text'); if (st && tt) tt.visible = st.visible;
+  }
+}
+function doCopy() {
+  const picks = [...document.querySelectorAll('#cpTree input[data-f]:checked')].map(c => [sits[+c.dataset.s], +c.dataset.f]);
+  if (!picks.length) { $('cpInfo').textContent = 'Отметьте кадры, куда копировать.'; return; }
+  flushState();
+  const src = F(), o = { textMode:document.querySelector('input[name=cpText]:checked')?.value || 'append', repl:$('cpRepl')?.checked, noText:$('cpNoText')?.checked };
+  let n = 0;
+  for (const [st, fi] of picks) { const T = st.frames[fi]; if (T === src) continue; copyInto(src, T, st === curSit, CP.ids, o); n++; }
+  $('cpModal').style.display = 'none';
+  renderTiles(); renderSitTabs(); save(true);
+  toast(`Скопировано в кадров: ${n}`);
+}
+$('copyAll').onclick = () => openCopy(['*']);
+$('cpGo').onclick = doCopy;
+$('cpClose').onclick = $('cpCancel').onclick = () => { $('cpModal').style.display = 'none'; };
+$('cpModal').addEventListener('mousedown', e => { if (e.target === $('cpModal')) $('cpModal').style.display = 'none'; });
+
+/* ================= ИМПОРТ CHATLOG ================= */
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.style.display = 'block';
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', 4500);
+}
+const NICK_RE = '[A-Za-z]+(?:_[A-Za-z]+)+';
+const RE_DO = new RegExp(`^\\*\\s+(.*?)\\s*\\(\\(\\s*(${NICK_RE})\\s*\\)\\)\\s*$`);
+const RE_ME = new RegExp(`^\\*\\s+(${NICK_RE})\\s+(.+)$`);
+const RE_SAY = new RegExp(`^(${NICK_RE})\\s+([а-яёa-z][а-яёa-z\\- ]{1,50}?):\\s*(.*)$`);
+const RE_SAY_ACT = new RegExp(`^([^:]+?),\\s+(${NICK_RE})\\s+([а-яёa-z][а-яёa-z\\- ]{1,50}?):\\s*(.*)$`);
+const RE_ANYNICK = new RegExp(`(?:^|[^A-Za-z_])(${NICK_RE})(?![A-Za-z_])`);
+const secOf = t => { if (!t) return null; const p = t.trim().split(':').map(Number); return p.some(isNaN) ? null : (p[0] || 0) * 3600 + (p[1] || 0) * 60 + (p[2] || 0); };
+let LG = { items:[], nicks:new Map(), skipped:0 };
+
+function parseChatlog(text) {
+  // 1) логические строки: перенос строки сервером («...» в конце и «...» в начале с тем же временем) склеивается
+  const lines = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const m = /^\s*\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s?(.*)$/.exec(raw);
+    const time = m ? m[1] : '', body = (m ? m[2] : raw).replace(/\{[0-9a-fA-F]{6}\}/g, '').trim();
+    if (!body) continue;
+    const last = lines[lines.length - 1];
+    if (last && /^\.{3}/.test(body) && last.time === time && /\.{3}$/.test(last.body)) {
+      last.body = last.body.replace(/\.{3}$/, '') + ' ' + body.replace(/^\.{3}\s*/, ''); continue;
+    }
+    lines.push({ time, body });
+  }
+  // 2) классификация
+  const items = [], nicks = new Map(); let skipped = 0;
+  const seen = (nick, word, strong) => {
+    const o = nicks.get(nick) || { n:0, f:0, m:0 }; nicks.set(nick, o); o.n++;
+    const w = (word || '').toLowerCase();
+    if (/(ла|лась)$/.test(w) && w.length >= 5) o.f += strong ? 3 : 1;
+    else if (strong ? /(л|лся)$/.test(w) : /(ал|ил|ел|ул|ыл|лся)$/.test(w) && w.length >= 5) o.m += strong ? 3 : 1;
+  };
+  for (const { time, body } of lines) {
+    let m;
+    const sm = /Скриншот сохран[её]н\s*[-–:]?\s*(\S+)/i.exec(body) || /screenshot.*?(sa-mp-\d+\S*)/i.exec(body);
+    if (sm) { items.push({ kind:'shot', time, name:sm[1].replace(/\.\w{2,4}$/, '') }); continue; }
+    const push = o => items.push({ kind:'line', time, nick:'', text:'', act:'', phrase:'', sel:true, ...o });
+    if (/^!\s/.test(body) || /^\(\(/.test(body)) {
+      const nk = RE_ANYNICK.exec(body)?.[1] || ''; push({ cat:'ooc', nick:nk, text:body.replace(/^!\s*/, '') }); continue;
+    }
+    if (/^\[[^\]]+\]/.test(body) || /^->/.test(body)) { skipped++; continue; }
+    if (body[0] === '*') {
+      if ((m = RE_DO.exec(body))) { seen(m[2]); push({ cat:'do', text:m[1], nick:m[2] }); }
+      else if ((m = RE_ME.exec(body))) {
+        seen(m[1], m[2].split(/\s+/).slice(0, 2).find(w => /(ла|лась|ал|ил|ел|ул|ыл|лся)$/i.test(w)), false);
+        push({ cat:'me', nick:m[1], text:m[2] });
+      } else push({ cat:'do', text:body.replace(/^\*\s*/, '') });
+      continue;
+    }
+    let a = RE_SAY.exec(body), act = '';
+    if (a) a = { nick:a[1], phrase:a[2], text:a[3] };
+    else if ((m = RE_SAY_ACT.exec(body))) { act = m[1]; a = { nick:m[2], phrase:m[3], text:m[4] }; }
+    if (a) {
+      seen(a.nick, a.phrase.split(/\s+/)[0], true);
+      push({ cat: /^\(\(/.test(a.text.trim()) ? 'ooc' : 'say', nick:a.nick, phrase:a.phrase, text:a.text, act, raw:body }); continue;
+    }
+    if ((m = RE_ANYNICK.exec(body))) { push({ cat:'other', nick:m[1], text:body }); continue; }
+    skipped++;
+  }
+  return { items, nicks, skipped };
+}
+
+const LG_CATS = { say:'lgSay', me:'lgMe', do:'lgDo', other:'lgOther', ooc:'lgOoc' };
+const LG_LABEL = { say:'речь', me:'/me', do:'/do', other:'прочее', ooc:'OOC' };
+function lgOpts() {
+  const o = { cats:{}, mode:document.querySelector('input[name=lgMode]:checked').value };
+  for (const [c, id] of Object.entries(LG_CATS)) o.cats[c] = $(id).checked;
+  o.from = secOf($('lgFrom').value); o.to = secOf($('lgTo').value);
+  o.n = Math.max(0, +$('lgN').value || 0); o.skip = $('lgSkip').checked; o.cur = $('lgCur').value; o.main = $('lgMain').value;
+  return o;
+}
+const lgInRange = (it, o) => { const t = secOf(it.time); return t === null || ((o.from === null || t >= o.from) && (o.to === null || t <= o.to)); };
+const lgEff = (it, o) => it.kind === 'line' && it.sel && o.cats[it.cat] && lgInRange(it, o);
+const lgGender = n => { const e = LG.nicks.get(n); return e && e.f > e.m ? 'f' : 'm'; };
+
+function lgSit(o) {                            // «ситуация» с учётом выбранного основного персонажа и угаданных полов
+  const main = o.main || curSit.nick, same = main.toLowerCase() === (curSit.nick || '').toLowerCase();
+  const players = JSON.parse(JSON.stringify(curSit.players || []));
+  for (const n of LG.nicks.keys()) {
+    if (n.toLowerCase() === main.toLowerCase() || players.some(p => p.nick.toLowerCase() === n.toLowerCase())) continue;
+    players.push({ nick:n, pid:'', gender:lgGender(n) });
+  }
+  const ex = players.findIndex(p => p.nick.toLowerCase() === main.toLowerCase());
+  const mp = ex >= 0 ? players.splice(ex, 1)[0] : null;
+  return { ...curSit, nick:same ? curSit.nick : main, pid:same ? curSit.pid : (mp?.pid || ''),
+           gender:same ? curSit.gender : (mp?.gender || lgGender(main)), players };
+}
+function lgRow(it, sit) {                      // элемент лога → строка редактора
+  const nick = it.nick && it.nick.toLowerCase() !== sit.nick.toLowerCase() ? it.nick : '';
+  const base = { type:'say', text:it.text, act:'', color:'#ffff00', nick:'', sfx:'', scol:'' };
+  switch (it.cat) {
+    case 'me': return { ...base, type:'me', nick };
+    case 'do': return { ...base, type:'do', nick };
+    case 'say': {
+      const ph = it.phrase.trim().toLowerCase(), std = [verbFor(sit, 'm'), verbFor(sit, 'f'), 'сказал', 'сказала'].map(x => x.toLowerCase());
+      return { ...base, type:it.act ? 'action' : 'say', act:it.act, nick, sfx:std.includes(ph) ? '' : it.phrase.trim() };
+    }
+    case 'ooc': return { ...base, type:'custom', color:'#b4b4b4' };
+    default: return { ...base, type:'custom', color:$('cMe').value };
+  }
+}
+
+function lgRender() {
+  const o = lgOpts(), sit = lgSit(o), box = $('logPreview');
+  // список основных персонажей
+  const sel0 = $('lgMain'), keep = sel0.value;
+  if (!lgRender._init || LG._fresh) {
+    const freq = [...LG.nicks.entries()].sort((a, b) => b[1].n - a[1].n).map(e => e[0]);
+    const cur = curSit.nick, inLog = freq.some(n => n.toLowerCase() === cur.toLowerCase());
+    sel0.innerHTML = [cur, ...freq.filter(n => n.toLowerCase() !== cur.toLowerCase())].filter(Boolean).map(n => `<option>${esc(n)}</option>`).join('');
+    sel0.value = cur;                              // по умолчанию основной персонаж не меняется (его можно выбрать вручную)
+    LG._fresh = false; lgRender._init = true;
+    return lgRender();
+  }
+  const rows = [];
+  LG.items.forEach((it, i) => {
+    if (it.kind === 'shot') { rows.push(`<div class="lsep">Скриншот: ${esc(it.name)} <span style="color:var(--faint)">${esc(it.time)}</span></div>`); return; }
+    const row = lgRow(it, sit), shown = buildLines([row], sit)[0]?.t || it.text, on = lgEff(it, o);
+    rows.push(`<label class="lp ${on ? '' : 'off'}"><input type="checkbox" data-i="${i}" ${it.sel ? 'checked' : ''}><span class="t">${esc(it.time)}</span>`
+      + `<span class="tp ${it.cat}">${LG_LABEL[it.cat]}</span><span class="tx">${esc(shown)}</span></label>`);
+  });
+  box.innerHTML = rows.join('') || '<div class="hint" style="padding:10px">Ничего не найдено.</div>';
+  box.querySelectorAll('input[data-i]').forEach(c => c.onchange = () => { LG.items[+c.dataset.i].sel = c.checked; lgRender(); });
+  const eff = LG.items.filter(it => lgEff(it, o)), cnt = {}; eff.forEach(it => cnt[it.cat] = (cnt[it.cat] || 0) + 1);
+  const shots = LG.items.filter(it => it.kind === 'shot').length;
+  const ppl = [...LG.nicks.entries()].map(([n, e]) => `${n}${lgGender(n) === 'f' ? ' ♀' : ''}`).join(', ');
+  $('logSummary').innerHTML = LG.items.length
+    ? `К импорту: <b>${eff.length}</b> (речь ${cnt.say || 0}, /me ${cnt.me || 0}, /do ${cnt.do || 0}, прочее ${cnt.other || 0}, OOC ${cnt.ooc || 0}). Скриншотов в логе: <b>${shots}</b>. Пропущено служебных строк (реклама, новости, лаунчер…): ${LG.skipped}.<br>Игроки: ${esc(ppl) || '—'}`
+    : 'Вставьте текст слева — реплики разберутся сами.';
+  $('lgShotOpts').style.display = $('lgSkipRow').style.display = o.mode === 'shots' ? '' : 'none';
+  $('logInfo').textContent = o.mode === 'shots' && !shots ? 'В логе нет строк «Скриншот сохранен» — будет создан один кадр.' : '';
+}
+function lgParse() {
+  const keep = new Map(LG.items.filter(i => i.kind === 'line').map(i => [i.time + '|' + i.text, i.sel]));
+  LG = { ...parseChatlog($('logText').value), _fresh:true };
+  LG.items.forEach(i => { if (i.kind === 'line' && keep.has(i.time + '|' + i.text)) i.sel = keep.get(i.time + '|' + i.text); });
+  lgRender();
+}
+let lgT; $('logText').oninput = () => { clearTimeout(lgT); lgT = setTimeout(lgParse, 250); };
+['lgSay', 'lgMe', 'lgDo', 'lgOther', 'lgOoc', 'lgFrom', 'lgTo', 'lgMain', 'lgSkip', 'lgN', 'lgCur'].forEach(id => { $(id).onchange = lgRender; if ($(id).type === 'text') $(id).oninput = lgRender; });
+document.querySelectorAll('input[name=lgMode]').forEach(r => r.onchange = lgRender);
+$('lgAll').onclick = () => { const o = lgOpts(); LG.items.forEach(i => { if (i.kind === 'line' && o.cats[i.cat] && lgInRange(i, o)) i.sel = true; }); lgRender(); };
+$('lgNone').onclick = () => { LG.items.forEach(i => { if (i.kind === 'line') i.sel = false; }); lgRender(); };
+$('logClear').onclick = () => { $('logText').value = ''; lgParse(); };
+$('logFileBtn').onclick = () => $('logFileIn').click();
+$('logFileIn').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const buf = await f.arrayBuffer();
+  let txt; try { txt = new TextDecoder('utf-8', { fatal:true }).decode(buf); } catch { txt = new TextDecoder('windows-1251').decode(buf); }   // chatlog.txt в SA-MP обычно в cp1251
+  $('logText').value = txt; lgParse();
+};
+$('impLog').onclick = () => { $('impModal').style.display = 'flex'; lgRender._init = false; lgParse(); $('logText').focus(); };
+const lgClose = () => { $('impModal').style.display = 'none'; };
+$('logClose').onclick = $('logCancel').onclick = lgClose;
+$('impModal').addEventListener('mousedown', e => { if (e.target === $('impModal')) lgClose(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('impModal').style.display !== 'none') lgClose(); });
+
+function lgImport() {
+  const o = lgOpts(), sit = lgSit(o);
+  const eff = LG.items.filter(it => lgEff(it, o));
+  if (!eff.length) { alert('Нет реплик для импорта: проверьте отметки, типы и диапазон времени.'); return; }
+  flushState();
+  // персонажи: основной и список игроков (с угаданным полом)
+  curSit.nick = sit.nick; curSit.pid = sit.pid; curSit.gender = sit.gender; curSit.players = sit.players;
+  loadSitInputs();
+  const total = eff.length; let made = 0;
+  if (o.mode === 'cur') {
+    const rows = eff.map(it => lgRow(it, sit));
+    F().rows = o.cur === 'append' ? [...getRows().filter(r => r.text.trim() || r.act.trim()), ...rows] : rows;
+    made = 1;
+  } else {
+    const out = [];
+    if (o.mode === 'one') out.push({ name:'Chatlog', shot:'', rows:eff.map(it => lgRow(it, sit)) });
+    else {
+      const hist = []; let pend = [];
+      for (const it of LG.items) {
+        if (it.kind === 'shot') {
+          if (!lgInRange(it, o)) continue;
+          const src = o.n > 0 ? hist.slice(-o.n) : pend;
+          if (src.length || !o.skip) out.push({ name:it.name, shot:it.name, rows:src.map(r => lgRow(r, sit)) });
+          pend = [];
+        } else if (lgEff(it, o)) { hist.push(it); pend.push(it); }
+      }
+      if (pend.length) out.push({ name:'После последнего скриншота', shot:'', rows:pend.map(r => lgRow(r, sit)) });
+      if (!out.length) out.push({ name:'Chatlog', shot:'', rows:eff.map(it => lgRow(it, sit)) });
+    }
+    F().rows = getRows();
+    const cf = F();
+    if (frames.length > 1 || out.length) { if (!cf.hasBg && !cf.layers.some(l => l.kind === 'img') && !cf.rows.some(r => r.text.trim() || r.act.trim())) { frames.splice(active, 1); } }
+    const first = frames.length;
+    out.forEach(c => { const f = newFrame(c.rows); f.name = c.name; f.shot = c.shot; frames.push(f); });
+    active = first; made = out.length;
+  }
+  renderTiles(); renderSitTabs(); switchTo(active, true); lgClose();
+  toast(`Импортировано реплик: ${total}. ${o.mode === 'cur' ? 'Кадр обновлён.' : `Создано кадров: ${made}.`}` + (o.mode === 'shots' && made ? ' Теперь перетащите скриншоты — они привяжутся к кадрам по имени файла.' : ''));
+}
+$('logGo').onclick = lgImport;
+
+/* ================= ДОКУМЕНТ СО СТРУКТУРОЙ ================= */
+const TYPE_NAMES = { me:'/me', do:'/do', say:'Речь', action:'Речь с действием', custom:'Прочие (свой цвет)' };
+function docModel(list) {                  // ситуация → кадры → участники, счётчики, реплики
+  flushState();
+  const showId = $('showId').checked;
+  return list.map(sit => ({
+    name: sit.name || 'Без названия',
+    frames: sit.frames.map(f => {
+      const lines = buildLines(f.rows, sit), counts = { me:0, do:0, say:0, action:0, custom:0 }, seen = new Map();
+      for (const l of lines) {
+        counts[l.type]++;
+        if (l.author && !seen.has(l.author.toLowerCase())) seen.set(l.author.toLowerCase(), { nick:l.author, pid:l.pid });
+      }
+      return {
+        name: f.name || 'Без названия',
+        players: [...seen.values()].map(p => showId && p.pid ? `${p.nick} (ID ${p.pid})` : p.nick),
+        counts, total: lines.length,
+        lines: lines.map(l => ({ type:l.type, text:l.t })),
+      };
+    }),
+  }));
+}
+const countsLine = f => Object.keys(TYPE_NAMES).map(k => `${TYPE_NAMES[k]} — ${f.counts[k]}`).join('; ') + `; всего — ${f.total}`;
+
+function toTXT(model) {
+  const out = [];
+  model.forEach((s, i) => {
+    if (i) out.push('', '');
+    out.push(`СИТУАЦИЯ: ${s.name}`, '='.repeat(Math.max(20, s.name.length + 11)));
+    s.frames.forEach(f => {
+      out.push('', `КАДР: ${f.name}`, '-'.repeat(Math.max(20, f.name.length + 6)));
+      out.push(`Участники: ${f.players.length ? f.players.join(', ') : '—'}`);
+      out.push(`Количество реплик: ${countsLine(f)}`);
+      out.push('Реплики:');
+      if (!f.lines.length) out.push('  (нет реплик)');
+      f.lines.forEach((l, n) => out.push(`  ${n + 1}. [${TYPE_NAMES[l.type]}] ${l.text}`));
+    });
+  });
+  return new Blob(['﻿' + out.join('\r\n') + '\r\n'], { type:'text/plain;charset=utf-8' });
+}
+
+/* --- минимальный DOCX: zip без сжатия + WordprocessingML --- */
+let _crcT;
+function crc32(u8) {
+  if (!_crcT) { _crcT = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; _crcT[n] = c >>> 0; } }
+  let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = _crcT[(c ^ u8[i]) & 255] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function zipStore(files, mime) {
+  const enc = new TextEncoder(), parts = [], cen = []; let off = 0;
+  const now = new Date(), dosT = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1), dosD = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+  for (const f of files) {
+    const nb = enc.encode(f.name), data = typeof f.data === 'string' ? enc.encode(f.data) : f.data, crc = crc32(data), len = data.length;
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(10, dosT, true); lh.setUint16(12, dosD, true);
+    lh.setUint32(14, crc, true); lh.setUint32(18, len, true); lh.setUint32(22, len, true); lh.setUint16(26, nb.length, true);
+    parts.push(lh.buffer, nb, data);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true); ch.setUint16(12, dosT, true); ch.setUint16(14, dosD, true);
+    ch.setUint32(16, crc, true); ch.setUint32(20, len, true); ch.setUint32(24, len, true); ch.setUint16(28, nb.length, true); ch.setUint32(42, off, true);
+    cen.push(ch.buffer, nb);
+    off += 30 + nb.length + len;
+  }
+  const cenSize = cen.reduce((a, b) => a + b.byteLength, 0), end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+  end.setUint32(12, cenSize, true); end.setUint32(16, off, true);
+  return new Blob([...parts, ...cen, end.buffer], { type:mime });
+}
+function toDOCX(model) {
+  const X = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const run = (t, o = {}) => `<w:r><w:rPr>${o.b ? '<w:b/>' : ''}${o.i ? '<w:i/>' : ''}${o.color ? `<w:color w:val="${o.color}"/>` : ''}</w:rPr><w:t xml:space="preserve">${X(t)}</w:t></w:r>`;
+  const para = (runs, o = {}) => `<w:p><w:pPr>${o.style ? `<w:pStyle w:val="${o.style}"/>` : ''}${o.pb ? '<w:pageBreakBefore/>' : ''}<w:spacing w:after="${o.after ?? 80}"/>${o.ind ? `<w:ind w:left="${o.ind}" w:hanging="${o.hang || 0}"/>` : ''}</w:pPr>${[].concat(runs).join('')}</w:p>`;
+  const body = [];
+  if (model.length > 1) body.push(para(run('Структура ситуаций', { b:true }), { after:200 }));
+  model.forEach((s, i) => {
+    body.push(para(run('Ситуация: ' + s.name), { style:'Heading1', pb: i > 0 }));
+    s.frames.forEach(f => {
+      body.push(para(run('Кадр: ' + f.name), { style:'Heading2' }));
+      body.push(para([run('Участники: ', { b:true }), run(f.players.length ? f.players.join(', ') : '—')]));
+      body.push(para([run('Количество реплик: ', { b:true }), run(countsLine(f))]));
+      body.push(para(run('Реплики:', { b:true }), { after:40 }));
+      if (!f.lines.length) body.push(para(run('(нет реплик)', { i:true, color:'808080' }), { ind:360 }));
+      f.lines.forEach((l, n) => body.push(para([run(`${n + 1}. `, { b:true }), run(`[${TYPE_NAMES[l.type]}] `, { color:'5B6B8C' }), run(l.text)], { ind:720, hang:360, after:40 })));
+      body.push(para('', { after:120 }));
+    });
+  });
+  const NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+  const head = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+  const files = [
+    { name:'[Content_Types].xml', data:`${head}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>` },
+    { name:'_rels/.rels', data:`${head}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>` },
+    { name:'word/_rels/document.xml.rels', data:`${head}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>` },
+    { name:'word/styles.xml', data:`${head}<w:styles ${NS}><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/><w:sz w:val="22"/><w:lang w:val="ru-RU"/></w:rPr></w:rPrDefault></w:docDefaults>
+<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>
+<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:spacing w:before="240" w:after="120"/><w:outlineLvl w:val="0"/></w:pPr><w:rPr><w:b/><w:color w:val="1F3864"/><w:sz w:val="36"/></w:rPr></w:style>
+<w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:spacing w:before="200" w:after="80"/><w:outlineLvl w:val="1"/></w:pPr><w:rPr><w:b/><w:color w:val="2F5496"/><w:sz w:val="28"/></w:rPr></w:style></w:styles>` },
+    { name:'word/document.xml', data:`${head}<w:document ${NS}><w:body>${body.join('')}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>` },
+  ];
+  return zipStore(files, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+}
+function exportDoc(list, baseName) {
+  if (!list.length) return;
+  const model = docModel(list), fmt = $('docFmt').value;
+  downloadBlob(fmt === 'docx' ? toDOCX(model) : toTXT(model), `${safe(baseName)}.${fmt}`);
+}
+$('docCur').onclick = () => exportDoc([curSit], 'Структура - ' + curSit.name);
+$('docAll').onclick = () => exportDoc(sits, 'Структура - все ситуации');
+
+/* ---- загрузка проекта (+ миграция со старой версии) ---- */
+async function loadProject() {
+  const d = await DB.get('kv', 'project');     // ошибка сети/сервера всплывает наверх — данные не затираются пустым проектом
+  try {
+    if (!d) return null;
+    if (d.v === 2) {
+      applySettings(d.settings);
+      sits = d.sits.map(s => normSit({ ...s, frames: s.frames.map(f => normFrame({ ...newFrame([], { counter:0 }), ...f, bgImg:null })) }));
+      return clamp(d.sa || 0, 0, sits.length - 1);
+    }
+    if (d.frames) {                        // старый формат: один набор кадров, скриншоты в base64
+      applySettings(d.settings);
+      const s = { id:uid(), gender:'m', verbF:'', players:[], name:'Ситуация 1', nick:d.settings?.nick ?? 'Max_Ritter', pid:d.settings?.pid ?? '25', verb:d.settings?.verb ?? 'сказал',
+                  active:d.active || 0, counter:d.counter || d.frames.length, frames:[] };
+      for (const o of d.frames) {
+        const f = { ...newFrame([], { counter:0 }), ...o, bgImg:null, imgId:'' };
+        if (o.hasBg && o.bgData) f.imgId = await putImage(dataURLtoBlob(o.bgData)); else f.hasBg = false;
+        delete f.bgData; s.frames.push(f);
+      }
+      sits = [s]; await DB.set('kv', 'project', { v:2, settings:readSettings(), sa:0, sits:sits.map(sitMeta) });
+      return 0;
+    }
+  } catch (e) { console.warn('load failed', e); }
+  return null;
+}
+
+/* ================= ТЕМА И ИНТЕРФЕЙС ================= */
+const TH = { stage:'#090b0f', c1:'#222836', c2:'#1a1f2b' };
+function readTheme() {
+  const cs = getComputedStyle(document.documentElement), g = n => cs.getPropertyValue(n).trim();
+  TH.stage = g('--stage') || TH.stage; TH.c1 = g('--chk1') || TH.c1; TH.c2 = g('--chk2') || TH.c2; _pat = null;
+}
+const ICON_SUN = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+const ICON_MOON = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+function applyTheme(t, persist = true) {
+  document.documentElement.setAttribute('data-theme', t);
+  if (persist) { try { localStorage.setItem('sampTheme', t); } catch {} }
+  $('themeBtn').innerHTML = t === 'dark' ? ICON_SUN : ICON_MOON;
+  $('themeBtn').title = t === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему';
+  readTheme(); if (curText) draw();
+}
+function updateZoomLabel() { $('zVal').textContent = viewZoom == null ? 'Вписать' : Math.round(V.z * 100) + '%'; }
+function setZoom(z) { viewZoom = z == null ? null : clamp(z, 0.1, 4); if (curText) { fit(); draw(); } }
+function updateHint() {                          // подсказка внизу — всегда одна и та же высота, меняется только текст
+  const f = F(); if (!f) return; let t;
+  if (!f.hasBg) t = 'Загрузите скриншот: кнопка «Загрузить скриншот», перетаскивание файла в окно или Ctrl+V. Без скриншота кадр — это только текст на прозрачном фоне.';
+  else if (sel === 'text') t = 'Текст: тащите мышью. Синие квадраты — ширина, высота и общий масштаб. Белая рамка — обрезка кадра, колесо мыши — масштаб фона.';
+  else if (sel === 'bg') t = 'Фон: тащите, чтобы сдвинуть; колесо мыши — масштаб. Тащите белую рамку, чтобы обрезать кадр.';
+  else { const X = f.layers.find(l => l.id === sel);
+    t = X && X.kind === 'fx' ? 'Эффекты действуют на всё, что ниже в списке слоёв. Область действия можно ограничить в свойствах справа.'
+      : 'Слой: тащите — переместить, угловые квадраты — размер, кружок сверху — поворот (Shift — шаг 15°). Delete — удалить.'; }
+  $('hint').textContent = t;
+}
+function initUI() {
+  applyTheme(document.documentElement.getAttribute('data-theme') || 'dark', false);
+  // вкладки левой панели
+  document.querySelectorAll('.tab').forEach(b => b.onclick = () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === b));
+    document.querySelectorAll('.tabpanel').forEach(p => p.classList.toggle('active', p.dataset.panel === b.dataset.tab));
+  });
+  // выпадающие меню
+  document.querySelectorAll('[data-menu]').forEach(b => b.onclick = e => { e.stopPropagation(); b.parentElement.classList.toggle('open'); });
+  document.addEventListener('click', e => document.querySelectorAll('.menuwrap.open').forEach(m => { if (!m.contains(e.target) || e.target.closest('.menu button')) m.classList.remove('open'); }));
+  $('themeBtn').onclick = () => applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+  $('zIn').onclick = () => setZoom((V.z || 1) * 1.25); $('zOut').onclick = () => setZoom((V.z || 1) / 1.25); $('zVal').onclick = () => setZoom(null);
+  // окна
+  const closeOn = (modal, ...btns) => { btns.forEach(b => $(b).onclick = () => { $(modal).style.display = 'none'; }); $(modal).addEventListener('mousedown', e => { if (e.target === $(modal)) $(modal).style.display = 'none'; }); };
+  closeOn('helpModal', 'helpClose', 'helpOk'); closeOn('exModal', 'exClose', 'exCancel');
+  $('helpBtn').onclick = () => { $('helpModal').style.display = 'flex'; };
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { $('helpModal').style.display = 'none'; $('exModal').style.display = 'none'; } });
+  // рабочая область следит за своим размером, а не страница за содержимым
+  new ResizeObserver(() => { if (curText && !drag) { fit(); draw(); } }).observe($('stage'));
+  initExport();
+}
+
+/* ================= ЭКСПОРТ: PNG / JPEG / PSD ================= */
+const BL_PSD = { 'source-over':'norm', multiply:'mul ', screen:'scrn', overlay:'over', darken:'dark', lighten:'lite' };
+const BL_CV = Object.fromEntries(Object.entries(BL_PSD).map(([k, v]) => [v, k]));
+const u16 = v => new Uint8Array([(v >> 8) & 255, v & 255]);
+const u32 = v => new Uint8Array([(v >>> 24) & 255, (v >>> 16) & 255, (v >>> 8) & 255, v & 255]);
+const asc = s => Uint8Array.from(s, c => c.charCodeAt(0) & 255);
+const cat = (...a) => { let n = 0; for (const x of a) n += x.length; const o = new Uint8Array(n); let p = 0; for (const x of a) { o.set(x, p); p += x.length; } return o; };
+
+function packRow(src, off, len, dst) {           // PackBits (RLE) одной строки канала
+  let i = 0, n = 0;
+  while (i < len) {
+    let run = 1; while (i + run < len && run < 128 && src[off + i + run] === src[off + i]) run++;
+    if (run >= 3) { dst[n++] = 257 - run; dst[n++] = src[off + i]; i += run; }
+    else {
+      const st = i; let cnt = 0;
+      while (i < len && cnt < 128) {
+        let r = 1; while (i + r < len && r < 3 && src[off + i + r] === src[off + i]) r++;
+        if (r >= 3) break; i++; cnt++;
+      }
+      dst[n++] = cnt - 1; for (let k = 0; k < cnt; k++) dst[n++] = src[off + st + k];
+    }
+  }
+  return n;
+}
+function rlePlane(plane, W, H) {
+  const counts = new Uint8Array(H * 2), tmp = new Uint8Array(W * 2 + 8), chunks = [];
+  for (let y = 0; y < H; y++) { const n = packRow(plane, y * W, W, tmp); counts[y * 2] = n >> 8; counts[y * 2 + 1] = n & 255; chunks.push(tmp.slice(0, n)); }
+  return { counts, data: cat(...chunks) };
+}
+function planesOf(canvas, W, H, withAlpha) {
+  const d = canvas.getContext('2d').getImageData(0, 0, W, H).data, n = W * H, P = [new Uint8Array(n), new Uint8Array(n), new Uint8Array(n), withAlpha ? new Uint8Array(n) : null];
+  for (let i = 0, j = 0; i < n; i++, j += 4) { P[0][i] = d[j]; P[1][i] = d[j + 1]; P[2][i] = d[j + 2]; if (withAlpha) P[3][i] = d[j + 3]; }
+  return P;
+}
+function psdLayerRecord(L, W, H) {              // запись слоя + данные каналов (RLE)
+  const P = planesOf(L.canvas, W, H, true);
+  const chans = [[-1, 3], [0, 0], [1, 1], [2, 2]].map(([id, pi]) => { const r = rlePlane(P[pi], W, H); return { id, data: cat(u16(1), r.counts, r.data) }; });
+  const name = L.name || 'Layer', pn = asc(name.replace(/[^\x20-\x7e]/g, '_').slice(0, 200) || 'Layer');
+  const pascal = cat(Uint8Array.of(pn.length), pn, new Uint8Array((4 - ((1 + pn.length) % 4)) % 4));
+  const uni = new Uint8Array(name.length * 2); for (let i = 0; i < name.length; i++) { const c = name.charCodeAt(i); uni[i * 2] = c >> 8; uni[i * 2 + 1] = c & 255; }
+  const ud = cat(u32(name.length), uni), udp = cat(ud, new Uint8Array((4 - (ud.length % 4)) % 4));
+  const luni = cat(asc('8BIM'), asc('luni'), u32(udp.length), udp);
+  const extra = cat(u32(0), u32(0), pascal, luni);
+  const rec = cat(u32(0), u32(0), u32(H), u32(W), u16(4), ...chans.map(c => cat(u16(c.id & 0xffff), u32(c.data.length))),
+    asc('8BIM'), asc(L.blend || 'norm'), Uint8Array.of(L.op, 0, L.visible ? 0 : 2, 0), u32(extra.length), extra);
+  return { rec, data: chans.map(c => c.data) };
+}
+function psdLayersOf(f, t) {                     // кадр → список растровых слоёв одинакового размера
+  const hasBg = f.hasBg && f.bgImg, W = hasBg ? Math.round(f.W) : t.width, H = hasBg ? Math.round(f.H) : t.height, layers = [];
+  const mk = () => { const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d', { willReadFrequently:true }); x.imageSmoothingQuality = 'high'; return [c, x]; };
+  const add = (name, canvas, op, blend, visible) => layers.push({ name, canvas, op, blend, visible });
+  if (hasBg) {
+    const [c, x] = mk(); x.setTransform(1, 0, 0, 1, -f.fx, -f.fy); x.translate(f.bx, f.by); x.scale(f.bs, f.bs); x.drawImage(bgSource(f), 0, 0);
+    add('Фон', c, 255, 'norm', true);
+  }
+  for (const L of f.layers) {
+    if (L.kind === 'text') { const [c, x] = mk(); x.drawImage(t, hasBg ? f.tx : 0, hasBg ? f.ty : 0); add('Текст', c, 255, 'norm', L.visible); }
+    else if (L.kind === 'img' && hasBg && L.img) {
+      const cv = layerCanvas(L), pd = cv.pad || 0, [c, x] = mk();
+      x.setTransform(1, 0, 0, 1, -f.fx, -f.fy); x.translate(L.cx, L.cy); x.rotate(L.rot * Math.PI / 180); x.scale(L.flip ? -L.s : L.s, L.s);
+      x.drawImage(cv, -L.iw / 2 - pd, -L.ih / 2 - pd);
+      add(L.name || 'Изображение', c, Math.round(L.op * 2.55), BL_PSD[L.blend] || 'norm', L.visible);
+    } else if (L.kind === 'fx' && hasBg && L.visible) {                 // эффект не хранится как слой — «запекается» в объединённый слой
+      const [c, x] = mk();
+      for (const l of layers) if (l.visible) { x.save(); x.globalAlpha = l.op / 255; x.globalCompositeOperation = BL_CV[l.blend] || 'source-over'; x.drawImage(l.canvas, 0, 0); x.restore(); }
+      x.setTransform(1, 0, 0, 1, -f.fx, -f.fy); applyFxLayer(x, f, L); x.setTransform(1, 0, 0, 1, 0, 0);
+      layers.length = 0; add(`${L.name || 'Эффекты'} (объединено со слоями ниже)`, c, 255, 'norm', true);
+    }
+  }
+  return { W, H, layers };
+}
+function buildPsd(f, o) {
+  const t = f === F() ? curText : makeTextCanvas(f.rows, f), { W, H, layers } = psdLayersOf(f, t);
+  if (W > 30000 || H > 30000) throw new Error('PSD не поддерживает кадры больше 30000 px');
+  const recs = layers.map(L => psdLayerRecord(L, W, H));
+  let li = cat(u16(recs.length), ...recs.map(r => r.rec), ...recs.flatMap(r => r.data));
+  if (li.length % 2) li = cat(li, new Uint8Array(1));
+  const lmi = cat(u32(li.length), li, u32(0)), layerSection = cat(u32(lmi.length), lmi);
+  const flat = document.createElement('canvas'); flat.width = W; flat.height = H;
+  const fx = flat.getContext('2d', { willReadFrequently:true }); fx.fillStyle = o.bg; fx.fillRect(0, 0, W, H);
+  for (const l of layers) if (l.visible) { fx.save(); fx.globalAlpha = l.op / 255; fx.globalCompositeOperation = BL_CV[l.blend] || 'source-over'; fx.drawImage(l.canvas, 0, 0); fx.restore(); }
+  const P = planesOf(flat, W, H, false).slice(0, 3).map(p => rlePlane(p, W, H));
+  const composite = cat(u16(1), ...P.map(r => r.counts), ...P.map(r => r.data));
+  const header = cat(asc('8BPS'), u16(1), new Uint8Array(6), u16(3), u32(H), u32(W), u16(8), u16(3));
+  return new Blob([header, u32(0), u32(0), layerSection, composite], { type:'image/vnd.adobe.photoshop' });
+}
+async function renderFrameBlob(f, fmt, o) {
+  if (fmt === 'psd') return buildPsd(f, o);
+  const src = exportCanvas(f, fmt === 'png' && o.textOnly);
+  if (fmt === 'png') return new Promise(r => src.toBlob(r, 'image/png'));
+  const c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
+  const x = c.getContext('2d'); x.fillStyle = o.bg; x.fillRect(0, 0, c.width, c.height); x.drawImage(src, 0, 0);   // JPEG без прозрачности
+  return new Promise(r => c.toBlob(r, 'image/jpeg', o.q));
+}
+const EX_HINT = {
+  png:'Без потерь, с прозрачностью. Лучший вариант для вставки в сообщения и редакторы.',
+  jpg:'Меньше по размеру, но без прозрачности: прозрачные места заливаются выбранным цветом. Качество задаётся ниже.',
+  psd:'Файл Photoshop со слоями: фон, картинки и текст — отдельными слоями с прозрачностью и режимом наложения. «Эффекты кадра» вшиваются в слои ниже себя.',
+};
+function exOpts() {
+  const fmt = document.querySelector('input[name=exFmt]:checked').value;
+  return { fmt, all:document.querySelector('input[name=exScope]:checked').value === 'all', q:(+$('exQ').value || 92) / 100, bg:$('exBg').value, ext:$('exExt').value, textOnly:$('exText').checked };
+}
+function updateEx() {                            // поля блокируются, а не прячутся — окно не меняет размер
+  const { fmt } = exOpts();
+  $('exFmtHint').textContent = EX_HINT[fmt];
+  ['exQ', 'exQn', 'exExt'].forEach(id => $(id).disabled = fmt !== 'jpg');
+  $('exBg').disabled = fmt === 'png'; $('exText').disabled = fmt !== 'png';
+}
+async function doExport() {
+  const o = exOpts(), ext = o.fmt === 'jpg' ? o.ext : o.fmt, btn = $('exGo'); btn.disabled = true;
+  try {
+    flushState();
+    if (!o.all) {
+      $('exInfo').textContent = 'Подготовка файла…'; await new Promise(r => setTimeout(r, 20));
+      downloadBlob(await renderFrameBlob(F(), o.fmt, o), `${safe(curSit.name)} - ${safe(F().name)}${o.textOnly ? ' (текст)' : ''}.${ext}`);
+    } else {
+      const files = [], used = new Set();
+      for (let i = 0; i < frames.length; i++) {
+        $('exInfo').textContent = `Упаковка ${i + 1} из ${frames.length}…`; await new Promise(r => setTimeout(r, 0));
+        const f = frames[i], blob = await renderFrameBlob(f, o.fmt, o);
+        let name = `${String(i + 1).padStart(2, '0')} - ${safe(f.name)}.${ext}`, n = 2;
+        while (used.has(name.toLowerCase())) name = `${String(i + 1).padStart(2, '0')} - ${safe(f.name)} (${n++}).${ext}`;
+        used.add(name.toLowerCase()); files.push({ name, data:new Uint8Array(await blob.arrayBuffer()) });
+      }
+      downloadBlob(zipStore(files, 'application/zip'), `${safe(curSit.name)} (${ext.toUpperCase()}).zip`);
+    }
+    $('exModal').style.display = 'none'; toast(o.all ? `Архив готов: кадров — ${frames.length}` : 'Файл сохранён');
+  } catch (e) { console.error(e); alert('Не удалось экспортировать: ' + e.message); }
+  finally { btn.disabled = false; $('exInfo').textContent = ''; }
+}
+function initExport() {
+  $('exBtn').onclick = () => { $('exInfo').textContent = ''; updateEx(); $('exModal').style.display = 'flex'; };
+  document.querySelectorAll('input[name=exFmt]').forEach(r => r.onchange = updateEx);
+  $('exQ').oninput = () => { $('exQn').value = $('exQ').value; }; $('exQn').oninput = () => { $('exQ').value = clamp(+$('exQn').value || 92, 50, 100); };
+  $('exGo').onclick = doExport;
+  updateEx();
+}
+
+/* ================= СЕРВЕР: API, ХРАНИЛИЩЕ, АВТОРИЗАЦИЯ ================= */
+const API = {
+  async call(method, url, body, raw) {
+    const o = { method, credentials: 'same-origin', headers: { 'X-Requested-With': 'chat-editor' } };
+    if (body !== undefined) {
+      if (raw) { o.body = body; o.headers['Content-Type'] = body.type || 'application/octet-stream'; }
+      else { o.body = JSON.stringify(body); o.headers['Content-Type'] = 'application/json'; }
+    }
+    const r = await fetch(url, o);
+    if (r.status === 401 && !/^\/api\/(login|register)/.test(url)) { Auth.expired(); const e = new Error('Сессия истекла — войдите снова.'); e.status = 401; throw e; }
+    return r;
+  },
+  async json(method, url, body) {
+    const r = await API.call(method, url, body), j = await r.json().catch(() => ({}));
+    if (!r.ok) { const e = new Error(j.error || ('Ошибка сервера (' + r.status + ')')); e.status = r.status; e.data = j; throw e; }
+    return j;
+  },
+};
+let projectRev = 0;                                      // версия проекта на сервере (для защиты от затирания)
+const imgCache = new Map();
+const DB = {                                             // тот же интерфейс, что был у IndexedDB, но данные — в аккаунте на сервере
+  async get(store, key) {
+    if (store === 'kv') { const j = await API.json('GET', '/api/project'); projectRev = j.rev; return j.project || undefined; }
+    if (imgCache.has(key)) return imgCache.get(key);
+    const r = await API.call('GET', '/api/images/' + encodeURIComponent(key));
+    if (r.status === 404) return undefined;
+    if (!r.ok) throw new Error('Не удалось загрузить картинку (' + r.status + ')');
+    const b = await r.blob(); imgCache.set(key, b); return b;
+  },
+  async set(store, key, value) {
+    if (store === 'kv') { const j = await API.json('PUT', '/api/project', { project: value, base: projectRev }); projectRev = j.rev; return; }
+    const r = await API.call('PUT', '/api/images/' + encodeURIComponent(key), value, true);
+    if (!r.ok) { const j = await r.json().catch(() => ({})); const e = new Error(j.error || ('Не удалось сохранить картинку (' + r.status + ')')); e.status = r.status; alert(e.message); throw e; }
+    imgCache.set(key, value);
+  },
+  async del(store, key) { await API.call('DELETE', '/api/images/' + encodeURIComponent(key)); imgCache.delete(key); },
+  async keys() { return (await API.json('GET', '/api/images')).ids; },
+};
+function setSaveState(st) {
+  const el = $('saveState'); if (!el) return;
+  el.dataset.s = st; el.textContent = { saved:'Сохранено', saving:'Сохранение…', error:'Не сохранено' }[st] || '';
+}
+
+/* перенос данных, накопленных в этом браузере до появления аккаунтов */
+async function offerLocalImport() {
+  try {
+    if (!window.indexedDB) return false;
+    const local = await LocalDB.get('kv', 'project');
+    if (!local || local.v !== 2 || !(local.sits || []).length) return false;
+    const flag = 'ceNoImport:' + Auth.user.id;
+    if (localStorage.getItem(flag)) return false;
+    if (!confirm('В этом браузере найдены локальные данные (версия без аккаунта).\nЗагрузить их в ваш аккаунт на сервере?')) { localStorage.setItem(flag, '1'); return false; }
+    const ids = new Set();
+    for (const st of local.sits) for (const f of st.frames || []) { if (f.imgId) ids.add(f.imgId); for (const L of f.layers || []) if (L.imgId) ids.add(L.imgId); }
+    let n = 0; toast('Переношу данные в аккаунт…');
+    for (const id of ids) { const b = await LocalDB.get('img', id); if (b) { await DB.set('img', id, b); n++; } }
+    await DB.set('kv', 'project', local);
+    toast(`Перенесено: ситуаций — ${local.sits.length}, картинок — ${n}`);
+    return true;
+  } catch (e) { console.warn('local import failed', e); alert('Не удалось перенести локальные данные: ' + e.message); return false; }
+}
+
+const Auth = {
+  user: null, cfg: { registration: 'open', needCode: false }, mode: 'login', shown: false, blocked: false,
+  async start(boot) {
+    this.boot = boot; this.bind();
+    try { this.cfg = await (await fetch('/api/config')).json(); } catch { /* значения по умолчанию */ }
+    let r; try { r = await fetch('/api/me', { credentials: 'same-origin' }); } catch { return this.fatal('Сервер недоступен.'); }
+    if (r.ok) { this.user = (await r.json()).user; await this.enter(); } else this.show();
+  },
+  async enter() {
+    $('auth').style.display = 'none'; $('userName').textContent = this.user.username;
+    try { await this.boot(); } catch (e) { console.error(e); this.fatal('Не удалось загрузить данные: ' + e.message); }
+  },
+  fatal(msg) { $('fatalMsg').textContent = msg; $('fatal').style.display = 'grid'; },
+  show(msg) {
+    $('auth').style.display = 'grid'; this.setMode(this.mode); $('auErr').textContent = msg || '';
+    $('auReg').style.display = this.cfg.registration === 'closed' ? 'none' : '';
+    $('auUser').focus();
+  },
+  expired() { if (this.shown) return; this.shown = true; this.show('Сессия истекла — войдите снова. Несохранённые изменения останутся на месте.'); },
+  setMode(m) {
+    this.mode = m; const reg = m === 'register';
+    document.querySelectorAll('[data-am]').forEach(b => b.classList.toggle('active', b.dataset.am === m));
+    $('auPass2Wrap').style.display = reg ? '' : 'none'; $('auCodeWrap').style.display = reg && this.cfg.needCode ? '' : 'none';
+    $('auGo').textContent = reg ? 'Создать аккаунт' : 'Войти';
+    $('auPass').autocomplete = reg ? 'new-password' : 'current-password';
+    $('authSub').textContent = reg ? 'Создайте аккаунт — у каждого пользователя своё хранилище ситуаций' : 'Войдите, чтобы работать со своими ситуациями';
+    $('auErr').textContent = '';
+  },
+  async submit(e) {
+    e.preventDefault(); const reg = this.mode === 'register', u = $('auUser').value.trim(), p = $('auPass').value;
+    if (!u || !p) { $('auErr').textContent = 'Введите логин и пароль.'; return; }
+    if (reg && p !== $('auPass2').value) { $('auErr').textContent = 'Пароли не совпадают.'; return; }
+    $('auGo').disabled = true; $('auErr').textContent = '';
+    try {
+      const j = await API.json('POST', reg ? '/api/register' : '/api/login', { username: u, password: p, code: $('auCode').value });
+      $('auPass').value = ''; $('auPass2').value = '';
+      if (this.user && this.user.id === j.user.id) { this.shown = false; $('auth').style.display = 'none'; save(true); }   // сессия обновлена — продолжаем с того же места
+      else location.reload();
+    } catch (err) { $('auErr').textContent = err.message; }
+    finally { $('auGo').disabled = false; }
+  },
+  async logout() { try { await API.call('POST', '/api/logout'); } catch { /* всё равно выходим */ } this.blocked = true; location.reload(); },
+  bind() {
+    $('authForm').addEventListener('submit', e => this.submit(e));
+    document.querySelectorAll('[data-am]').forEach(b => b.onclick = () => this.setMode(b.dataset.am));
+    $('logoutBtn').onclick = () => this.logout();
+    $('fatalRetry').onclick = () => location.reload();
+    const pw = $('pwModal'), close = () => { pw.style.display = 'none'; };
+    $('pwBtn').onclick = () => { ['pwOld', 'pwNew', 'pwNew2'].forEach(i => $(i).value = ''); $('pwErr').textContent = ''; pw.style.display = 'flex'; $('pwOld').focus(); };
+    $('pwClose').onclick = $('pwCancel').onclick = close; pw.addEventListener('mousedown', e => { if (e.target === pw) close(); });
+    $('pwGo').onclick = async () => {
+      if ($('pwNew').value !== $('pwNew2').value) { $('pwErr').textContent = 'Новые пароли не совпадают.'; return; }
+      $('pwGo').disabled = true; $('pwErr').textContent = '';
+      try { await API.json('POST', '/api/password', { oldPassword: $('pwOld').value, newPassword: $('pwNew').value }); close(); toast('Пароль изменён. На других устройствах потребуется войти заново.'); }
+      catch (e) { $('pwErr').textContent = e.message; } finally { $('pwGo').disabled = false; }
+    };
+  },
+};
+
+/* ================= СТАРТ ================= */
+async function boot() {
+  let idx = await loadProject();
+  if (idx === null && await offerLocalImport()) idx = await loadProject();
+  if (idx === null) {
+    const s = makeSit('Ситуация 1'); s.frames = []; s.counter = 0;
+    s.frames.push(newFrame([
+      { type:'me', text:'делает себе кофе, постукивая по старой кофемашине' },
+      { type:'say', text:'Ч-чёрт… Старая хренотень!' },
+      { type:'do', text:'Кофемашина закончила работу, как вдруг зазвонил стационарный телефон на столе.' },
+      { type:'action', text:'О!', act:'Направившись к телефону' },
+      { type:'me', text:'нажал кнопку принятия звонка на телефоне' },
+      { type:'me', text:'поднёс трубку к уху и начал внимательно слушать' },
+    ].map(r => ({ act:'', color:'#ffff00', nick:'', ...r })), s));
+    sits = [s]; idx = 0;
+  }
+  initUI();
+  await (document.fonts?.ready || Promise.resolve());
+  await switchSit(idx);
+  clearTimeout(gcT); gcT = setTimeout(() => { gcImages(); updateStorage(); }, 4000);
+  updateStorage();
+  window.__ready = true;
+}
+Auth.start(boot);
+</script>
+</body>
+</html>

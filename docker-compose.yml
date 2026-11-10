@@ -1,0 +1,47 @@
+# Запуск:  docker compose up -d --build
+# Настройки читаются из файла .env (шаблон — .env.example).
+services:
+  app:
+    build: .
+    image: chat-editor:latest
+    container_name: chat-editor
+    restart: unless-stopped
+    environment:
+      TRUST_PROXY: "${TRUST_PROXY:-}"
+      COOKIE_SECURE: "${COOKIE_SECURE:-auto}"
+      REGISTRATION: "${REGISTRATION:-open}"
+      REGISTRATION_CODE: "${REGISTRATION_CODE:-}"
+      USER_QUOTA_MB: "${USER_QUOTA_MB:-1024}"
+      MAX_IMAGE_MB: "${MAX_IMAGE_MB:-40}"
+      SESSION_DAYS: "${SESSION_DAYS:-30}"
+      BACKUP_EVERY_HOURS: "${BACKUP_EVERY_HOURS:-24}"
+      BACKUP_KEEP: "${BACKUP_KEEP:-7}"
+    ports:
+      # Внешний порт по умолчанию 8420 (3000 на сервере занят). Поменять — HOST_PORT в .env.
+      # За обратным прокси/HTTPS-профилем выставьте BIND_ADDR=127.0.0.1.
+      - "${BIND_ADDR:-0.0.0.0}:${HOST_PORT:-8420}:8000"
+    volumes:
+      - chat-editor-data:/data          # база данных и резервные копии
+
+  # Необязательно: автоматический HTTPS (Let's Encrypt) на домене. Включается:  docker compose --profile https up -d
+  # Нужны свободные порты 80 и 443 и DOMAIN в .env. В этом режиме: BIND_ADDR=127.0.0.1, TRUST_PROXY=1, COOKIE_SECURE=true.
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["https"]
+    container_name: chat-editor-caddy
+    restart: unless-stopped
+    depends_on: [app]
+    environment:
+      DOMAIN: "${DOMAIN:-localhost}"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  chat-editor-data:
+  caddy-data:
+  caddy-config:
