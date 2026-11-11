@@ -187,6 +187,10 @@
   #logSummary { font-size:12px; color:var(--muted); margin-bottom:8px; line-height:1.55; }
   .lp { display:flex; gap:8px; align-items:baseline; padding:4px 6px; font-size:12px; border-bottom:1px solid var(--border); cursor:pointer; margin:0; color:var(--text); }
   .lp.off { opacity:.35; }
+  .lp.bk { cursor:default; align-items:center; padding:5px 6px; }
+  .lp.bk select { width:auto; flex:none; padding:2px 4px; font-size:11.5px; } .lp.bk input.bn { width:130px; flex:none; padding:2px 6px; font-size:11.5px; }
+  #bkText { height:230px; resize:vertical; white-space:pre; }
+  .bkhelp code { font-size:11.5px; } .bkhelp td { padding:2px 8px 2px 0; vertical-align:top; font-size:12px; color:var(--muted); }
   .lp .t { color:var(--faint); font-family:ui-monospace,Consolas,monospace; flex:none; }
   .lp .tp { flex:none; font-size:10px; padding:0 6px; border-radius:8px; background:var(--panel3); color:var(--muted); }
   .lp .tp.me, .lp .tp.do { background:rgba(150,110,220,.22); color:#a98be8; } .lp .tp.say { background:var(--accent-soft); color:var(--accent); }
@@ -348,7 +352,8 @@
         <button data-add="say">＋ Речь</button>
         <button data-add="action" title="Речь с действием перед ником">＋ Речь+действие</button>
         <button data-add="custom">＋ Свой цвет</button>
-        <button id="impLog" class="primary" title="Вставить текст chatlog — реплики разберутся автоматически">Chatlog…</button>
+        <button id="impLog" title="Вставить текст chatlog — реплики разберутся автоматически">Chatlog…</button>
+        <button id="bulkBtn" class="primary" style="grid-column:1/-1" title="Вставить много строк сразу: «Ник: текст», «Ник: /me действие» — всё рассортируется само">Массовый ввод строк…</button>
       </div>
     </div>
   </section>
@@ -633,6 +638,44 @@
 </div>
 
 <!-- ===== Экспорт ===== -->
+<!-- Окно: массовый ввод строк -->
+<div id="bulkModal" class="modal" style="display:none">
+  <div class="mdl">
+    <div class="mh"><b>Массовый ввод строк</b><button id="bkClose" class="x">✕</button></div>
+    <div class="mb">
+      <div>
+        <label>Вставьте или напишите строки по шаблону «Ник: текст»</label>
+        <textarea id="bkText" spellcheck="false" placeholder="Brianna_Delgado: Привет, камера!&#10;Brianna_Delgado: /me помахала рукой и улыбнулась&#10;Nathaniel_Cox: привяо!"></textarea>
+        <div class="bar" style="margin-top:6px"><button id="bkSample" class="sm">Вставить пример</button><button id="bkClear" class="sm">Очистить</button></div>
+        <details style="margin:10px 0">
+          <summary>Как писать</summary>
+          <table class="bkhelp">
+            <tr><td><code>Ник: текст</code></td><td>речь</td></tr>
+            <tr><td><code>Ник: /me текст</code></td><td>действие «* Ник текст»</td></tr>
+            <tr><td><code>Ник: /do текст</code></td><td>описание «* текст (( Ник ))»</td></tr>
+            <tr><td><code>Ник (Взглянув на часы): текст</code></td><td>речь с действием</td></tr>
+            <tr><td><code>Ник: /s</code> <code>/w</code> <code>/r</code> <code>/t</code></td><td>кричит · шепчет · по рации · по телефону</td></tr>
+            <tr><td><code>Ник: /b текст</code> или <code>(( текст ))</code></td><td>OOC</td></tr>
+            <tr><td><code>/me текст</code> без ника</td><td>действие основного персонажа</td></tr>
+            <tr><td>строка <code>---</code> или пустая</td><td>новый кадр (если включено)</td></tr>
+          </table>
+          <p class="hint">Можно вставлять и обычный chatlog: «[12:00:01] * Ник действие» и «Ник сказал: …» тоже понятны. Ник можно сокращать до имени или фамилии, если персонаж уже есть в ситуации. ID: <code>Ник[25]: текст</code>.</p>
+        </details>
+        <h3>Куда поместить</h3>
+        <label class="opt"><input type="radio" name="bkMode" value="append" checked> В текущий кадр — добавить в конец</label>
+        <label class="opt"><input type="radio" name="bkMode" value="replace"> В текущий кадр — заменить строки</label>
+        <label class="opt"><input type="radio" name="bkMode" value="new"> В новый кадр</label>
+        <label class="opt" style="margin-left:22px"><input type="checkbox" id="bkSplit"> Пустая строка или <code>---</code> начинает следующий кадр</label>
+      </div>
+      <div>
+        <div id="bkSummary" class="hint" style="margin-bottom:8px">Вставьте текст слева — строки разберутся сами. Тип и ник каждой строки можно поправить здесь.</div>
+        <div id="bkPreview"></div>
+      </div>
+    </div>
+    <div class="mf"><span class="sp muted" id="bkInfo">Ctrl+Enter — добавить</span><button id="bkGo" class="primary">Добавить в кадр</button><button id="bkCancel">Отмена</button></div>
+  </div>
+</div>
+
 <div id="exModal" class="modal" style="display:none">
   <div class="mdl" style="width:min(540px,100%)">
     <div class="mh"><b>Экспорт</b><button id="exClose" class="x">✕</button></div>
@@ -2434,6 +2477,146 @@ const lgClose = () => { $('impModal').style.display = 'none'; };
 $('logClose').onclick = $('logCancel').onclick = lgClose;
 $('impModal').addEventListener('mousedown', e => { if (e.target === $('impModal')) lgClose(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('impModal').style.display !== 'none') lgClose(); });
+
+
+/* ================= МАССОВЫЙ ВВОД СТРОК ================= */
+const BK = { items:[], over:new Map(), gender:new Map(), ids:new Map(), nicks:[] };
+const BK_TYPES = { say:'речь', action:'речь+действие', me:'/me', do:'/do', ooc:'OOC', other:'прочее' };
+const BK_SAYCMD = { s:'кричит', shout:'кричит', scream:'кричит', w:'шепчет', whisper:'шепчет', low:'тихо говорит', r:'по рации', rad:'по рации', radio:'по рации',
+                    t:'по телефону', ph:'по телефону', phone:'по телефону', tel:'по телефону' };
+const BK_NICK_RE = /^[\p{L}\d]+(?:_[\p{L}\d]+)+$/u;
+const bkClean = n => String(n || '').replace(/\[[^\]]*\]\s*$/, '').trim();
+function bkKnown(extra) {
+  const list = [curSit.nick, ...(curSit.players || []).map(p => p.nick), ...extra].filter(Boolean), seen = new Set();
+  return list.filter(n => !seen.has(n.toLowerCase()) && seen.add(n.toLowerCase()));
+}
+function bkResolve(tok, known) {                                  // «Brianna» → Brianna_Delgado, если такой персонаж уже есть
+  const t = tok.toLowerCase();
+  const exact = known.find(n => n.toLowerCase() === t); if (exact) return exact;
+  if (BK_NICK_RE.test(tok)) return tok;
+  const part = known.filter(n => n.toLowerCase().split('_').includes(t));
+  return part.length === 1 ? part[0] : null;
+}
+function bkParse(text) {
+  const items = [], ids = new Map(), underscored = new Set();
+  for (const m of text.matchAll(/(?:^|\n)\s*(?:\[[^\]\n]*\]\s*)?([\p{L}\d]+(?:_[\p{L}\d]+)+)\s*(?:\[\d+\])?\s*(?:\([^)\n]*\))?\s*(?::|\s\/)/gu)) underscored.add(m[1]);
+  const known = bkKnown([...underscored]), main = curSit.nick;
+  let frame = 0, brk = false;
+  for (const raw of text.split(/\r?\n/)) {
+    let line = raw.replace(/^\s*\[\d{1,2}:\d{2}(?::\d{2})?\]\s*/, '').replace(/\{[0-9a-fA-F]{6}\}/g, '').trim();
+    if (!line) { if (items.length) brk = true; continue; }
+    if (/^(-{3,}|={3,}|_{3,})$/.test(line)) { if (items.length) brk = true; continue; }
+    if (brk) { frame++; brk = false; }
+    let nick = '', act = '', body = line, m;
+    if ((m = /^([\p{L}\d._-]+)\s*(?:\[(\d+)\])?\s*(?:\(([^)]*)\))?\s*(?::\s*|\s+(?=\/\w))(.*)$/u.exec(line))) {
+      const r = bkResolve(m[1], known);
+      if (r && m[4].trim()) { nick = r; body = m[4].trim(); act = (m[3] || '').trim(); if (m[2]) ids.set(r.toLowerCase(), m[2]); }
+    }
+    let type = 'say', sfx = '', t = body, c;
+    if ((c = /^\/(\S+)\s*(.*)$/.exec(body))) {
+      const cmd = c[1].toLowerCase(), rest = c[2].trim();
+      if (['me', 'ame', 'm'].includes(cmd)) { type = 'me'; t = rest; }
+      else if (cmd === 'do') { type = 'do'; t = rest; }
+      else if (BK_SAYCMD[cmd]) { type = 'say'; sfx = BK_SAYCMD[cmd]; t = rest; }
+      else if (cmd === 'b' || cmd === 'ooc') { type = 'ooc'; t = rest; }
+      else { type = 'other'; t = body; }
+    } else if (body[0] === '*') {
+      if ((c = RE_DO.exec(body))) { type = 'do'; t = c[1]; if (!nick) nick = c[2]; }
+      else if ((c = RE_ME.exec(body))) { type = 'me'; t = c[2]; if (!nick) nick = c[1]; }
+      else { type = 'do'; t = body.replace(/^\*\s*/, ''); }
+    } else if (/^\(\(/.test(body)) type = 'ooc';
+    else if (!nick && (c = RE_SAY.exec(body))) { nick = c[1]; t = c[3]; sfx = /^(сказал|сказала|говорит|произнес[лл]а?)$/i.test(c[2].trim()) ? '' : c[2].trim(); }   // «Ник сказал: …» из chatlog
+    if (type === 'ooc') t = t.replace(/^\(\(\s*/, '').replace(/\s*\)\)\s*$/, '');
+    if (type === 'do' || type === 'me') t = t.replace(/\s*\(\(\s*[\p{L}\d_]+\s*\)\)\s*$/u, '');
+    if (type === 'me' && nick && t.toLowerCase().startsWith(nick.toLowerCase() + ' ')) t = t.slice(nick.length).trim();
+    if (!t.trim()) continue;
+    if (type === 'say' && act) type = 'action';
+    const key = line, ov = BK.over.get(key);
+    const it = { type, nick: nick && nick.toLowerCase() !== main.toLowerCase() ? nick : '', text: t.trim(), act, sfx, frame, key };
+    if (ov) { if (ov.type) it.type = ov.type; if (ov.nick !== undefined) it.nick = ov.nick; }
+    items.push(it);
+  }
+  const gender = new Map();                                        // пол по глаголам в /me («помахала» → женский)
+  for (const it of items) if (it.type === 'me') {
+    const who = (it.nick || main).toLowerCase(), w = it.text.split(/\s+/).slice(0, 2).find(x => /(ла|лась|ал|ил|ел|ул|ыл|лся)$/i.test(x)) || '';
+    const o = gender.get(who) || { f:0, m:0 }; gender.set(who, o);
+    if (/(ла|лась)$/i.test(w)) o.f++; else if (w) o.m++;
+  }
+  BK.gender = gender; BK.ids = ids;
+  return items;
+}
+function bkSit() {                                                 // ситуация с новыми персонажами из текста (пол угадан, ID из «Ник[25]»)
+  const sit = { ...curSit, players: JSON.parse(JSON.stringify(curSit.players || [])) };
+  for (const it of BK.items) {
+    const n = it.nick; if (!n || n.toLowerCase() === sit.nick.toLowerCase() || sit.players.some(p => p.nick.toLowerCase() === n.toLowerCase())) continue;
+    const g = BK.gender.get(n.toLowerCase());
+    sit.players.push({ nick:n, pid:BK.ids.get(n.toLowerCase()) || '', gender: g && g.f > g.m ? 'f' : 'm' });
+  }
+  return sit;
+}
+function bkRow(it, sit) {
+  const base = { type:'say', text:it.text, act:'', color:'#ffff00', nick:it.nick, sfx:'', scol:'' };
+  switch (it.type) {
+    case 'me': return { ...base, type:'me' };
+    case 'do': return { ...base, type:'do' };
+    case 'say': return { ...base, sfx:it.sfx };
+    case 'action': return { ...base, type:'action', act:it.act, sfx:it.sfx };
+    case 'ooc': return { ...base, type:'custom', nick:'', text:`(( ${it.text} ))`, color:'#b4b4b4' };
+    default: return { ...base, type:'custom', nick:'', color:$('cMe').value };
+  }
+}
+function bkRender() {
+  BK.items = bkParse($('bkText').value);
+  const sit = bkSit(), box = $('bkPreview'), split = $('bkSplit').checked && document.querySelector('input[name=bkMode]:checked').value === 'new';
+  let html = '', last = 0;
+  BK.items.forEach((it, i) => {
+    if (split && it.frame !== last) { html += `<div class="lsep">Новый кадр</div>`; last = it.frame; }
+    const shown = buildLines([bkRow(it, sit)], sit)[0]?.t || it.text;
+    html += `<div class="lp bk"><select data-i="${i}">${Object.entries(BK_TYPES).map(([k, v]) => `<option value="${k}"${k === it.type ? ' selected' : ''}>${v}</option>`).join('')}</select>`
+      + `<input type="text" class="bn" data-n="${i}" list="nicks" value="${esc(it.nick)}" placeholder="${esc(curSit.nick)}" title="Пусто — основной персонаж"><span class="tx">${esc(shown)}</span></div>`;
+  });
+  box.innerHTML = html || '<div class="hint" style="padding:10px">Пока ничего нет.</div>';
+  box.querySelectorAll('select[data-i]').forEach(e => e.onchange = () => { const it = BK.items[+e.dataset.i]; BK.over.set(it.key, { ...(BK.over.get(it.key) || {}), type:e.value }); bkRender(); });
+  box.querySelectorAll('input[data-n]').forEach(e => e.onchange = () => { const it = BK.items[+e.dataset.n]; BK.over.set(it.key, { ...(BK.over.get(it.key) || {}), nick:bkClean(e.value) }); bkRender(); });
+  const cnt = {}; BK.items.forEach(it => cnt[it.type] = (cnt[it.type] || 0) + 1);
+  const ppl = [...new Set(BK.items.map(it => it.nick || curSit.nick))].map(n => { const g = BK.gender.get(n.toLowerCase()); return n + (g && g.f > g.m ? ' ♀' : ''); });
+  $('bkSummary').innerHTML = BK.items.length
+    ? `Строк: <b>${BK.items.length}</b> (речь ${(cnt.say || 0) + (cnt.action || 0)}, /me ${cnt.me || 0}, /do ${cnt.do || 0}, OOC ${cnt.ooc || 0}, прочее ${cnt.other || 0}). Персонажи: ${esc(ppl.join(', '))}.`
+    : 'Вставьте текст слева — строки разберутся сами. Тип и ник каждой строки можно поправить здесь.';
+  $('bkGo').disabled = !BK.items.length;
+}
+function bkImport() {
+  if (!BK.items.length) return;
+  const mode = document.querySelector('input[name=bkMode]:checked').value, split = $('bkSplit').checked;
+  flushState();
+  const sit = bkSit(); curSit.players = sit.players; loadSitInputs();
+  const rows = it => bkRow(it, sit);
+  let made = 0;
+  if (mode === 'new') {
+    const groups = new Map(); BK.items.forEach(it => { const k = split ? it.frame : 0; (groups.get(k) || groups.set(k, []).get(k)).push(it); });
+    F().rows = getRows(); const cf = F();
+    if (!cf.hasBg && !cf.layers.some(l => l.kind === 'img') && !cf.rows.some(r => r.text.trim() || r.act.trim()) && frames.length > 1) frames.splice(active, 1);
+    const first = frames.length; let n = 0;
+    for (const g of groups.values()) { const f = newFrame(g.map(rows)); f.name = groups.size > 1 ? `Кадр ${++n}` : 'Массовый ввод'; frames.push(f); }
+    active = first; made = groups.size;
+  } else {
+    const add = BK.items.map(rows);
+    F().rows = mode === 'append' ? [...getRows().filter(r => r.text.trim() || r.act.trim()), ...add] : add;
+  }
+  renderTiles(); renderSitTabs(); switchTo(active, true); bkClose();
+  toast(`Добавлено строк: ${BK.items.length}. ${mode === 'new' ? `Создано кадров: ${made}.` : 'Кадр обновлён.'}`);
+}
+const bkClose = () => { $('bulkModal').style.display = 'none'; };
+$('bulkBtn').onclick = () => { $('bulkModal').style.display = 'flex'; bkRender(); $('bkText').focus(); };
+$('bkClose').onclick = $('bkCancel').onclick = bkClose;
+$('bkGo').onclick = bkImport;
+$('bulkModal').addEventListener('mousedown', e => { if (e.target === $('bulkModal')) bkClose(); });
+let bkT; $('bkText').oninput = () => { clearTimeout(bkT); bkT = setTimeout(bkRender, 200); };
+$('bkText').addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); bkImport(); } });
+document.querySelectorAll('input[name=bkMode]').forEach(r => r.onchange = bkRender); $('bkSplit').onchange = bkRender;
+$('bkClear').onclick = () => { $('bkText').value = ''; bkRender(); };
+$('bkSample').onclick = () => { $('bkText').value = 'Brianna_Delgado: Привет, камера!\nBrianna_Delgado: /me помахала рукой и улыбнулась\nNathaniel_Cox: привяо!\nNathaniel_Cox: /do В студии горел яркий свет.\nBrianna_Delgado (Повернувшись к оператору): Мы в эфире через минуту.\nNathaniel_Cox: /r Принято, готовим вышку\nBrianna: /b сейчас начнём'; bkRender(); };
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('bulkModal').style.display !== 'none') bkClose(); });
 
 function lgImport() {
   const o = lgOpts(), sit = lgSit(o);
