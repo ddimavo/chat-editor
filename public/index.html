@@ -2162,28 +2162,143 @@ function afterChange() {
 }
 ctrl.forEach(k => { $(k).oninput = render; $(k).onchange = render; });
 
-function save(now) {
-  clearTimeout(saveT);
-  saveT = setTimeout(async () => {
-    if (!curSit) return;
-    flushState();
-    const data = { v:2, settings:readSettings(), sa:sits.indexOf(curSit), sits:sits.map(sitMeta), docs:Docs.serialize() };
-    if (Auth.blocked) return;
-    setSaveState('saving');
-    try { await DB.set('kv', 'project', data); setSaveState('saved'); }
-    catch (e) {
-      if (e.status === 409) {                                   // тот же аккаунт открыт в другой вкладке / на другом устройстве
-        setSaveState('error');
-        if (confirm('Данные в аккаунте были изменены в другой вкладке или на другом устройстве.\n\nОК — перезаписать их текущей версией.\nОтмена — загрузить версию с сервера (несохранённые изменения здесь пропадут).')) { projectRev = e.data.rev; save(true); }
-        else { Auth.blocked = true; location.reload(); }
-      } else if (e.status !== 401) { console.warn('save failed', e); setSaveState('error'); saveT = setTimeout(() => save(), 5000); }
-      return;
-    }
-    clearTimeout(gcT); gcT = setTimeout(() => { gcImages(); updateStorage(); }, 4000);
-  }, now ? 0 : 500);
+/* ================= СИНХРОНИЗАЦИЯ С СЕРВЕРОМ =================
+   Один сохранитель за раз (никаких «гонок» между собственными запросами). Если сервер ушёл вперёд (другая вкладка/устройство,
+   потерянный ответ), изменения сливаются по частям (ситуация / публикация / настройки) относительно последнего известного состояния —
+   без вопросов пользователю: ничего не теряется, при настоящем конфликте обе версии сохраняются. */
+const Sync = {
+  base: null,            // что, по нашим сведениям, лежит на сервере (после последней успешной записи/слияния)
+  busy: false, again: false, queued: false, retry: 0, lastRemote: 0,
+};
+const sitJ = s => JSON.stringify({ ...sitMeta(s), active:0 });
+const docJ = d => JSON.stringify([d.id, d.kind, d.title, d.html]);
+function snapOf(settings, sitList, docList, sa) {
+  return { settings:JSON.stringify(settings), sa, sitOrder:sitList.map(s => s.id).join(), docOrder:docList.map(d => d.id).join(),
+           sits:new Map(sitList.map(s => [s.id, sitJ(s)])), docs:new Map(docList.map(d => [d.id, docJ(d)])) };
 }
-document.addEventListener('visibilitychange', () => { if (document.hidden) save(true); });
+const sameMap = (a, b) => a.size === b.size && [...a].every(([k, v]) => b.get(k) === v);
+const sameSnap = (a, b) => !!a && !!b && a.settings === b.settings && a.sa === b.sa && a.sitOrder === b.sitOrder && a.docOrder === b.docOrder && sameMap(a.sits, b.sits) && sameMap(a.docs, b.docs);
+const normRemoteSit = raw => normSit({ ...raw, frames:raw.frames.map(f => normFrame({ ...newFrame([], { counter:0 }), ...f, bgImg:null })) });
+function localSnap() { flushState(); return snapOf(readSettings(), sits, Docs.serialize(), sits.indexOf(curSit)); }
+Sync.rebase = () => { Sync.base = localSnap(); };
+Sync.unsaved = () => !!curSit && !sameSnap(localSnap(), Sync.base);
+
+function save(now) {
+  Sync.queued = true; clearTimeout(saveT);
+  saveT = setTimeout(pushNow, now ? 0 : 600);
+}
+async function pushNow() {
+  if (!curSit || Auth.blocked) return;
+  if (Sync.busy) { Sync.again = true; return; }
+  Sync.busy = true; Sync.queued = false;
+  try {
+    for (let round = 0; round < 6; round++) {
+      Sync.again = false; flushState();
+      const settings = readSettings(), docs = Docs.serialize(), sa = sits.indexOf(curSit);
+      const mine = snapOf(settings, sits, docs, sa);
+      if (sameSnap(mine, Sync.base)) { setSaveState('saved'); if (!Sync.again) break; continue; }
+      setSaveState('saving');
+      try {
+        const j = await API.json('PUT', '/api/project', { project:{ v:2, settings, sa, sits:sits.map(sitMeta), docs }, base:projectRev });
+        projectRev = j.rev; Sync.base = mine; Sync.retry = 0; setSaveState('saved');
+        clearTimeout(gcT); gcT = setTimeout(() => { gcImages(); updateStorage(); }, 4000);
+      } catch (e) {
+        if (e.status !== 409) throw e;
+        await reconcile();                                        // сервер ушёл вперёд: сливаем и пробуем ещё раз
+        Sync.again = true; continue;
+      }
+      if (!Sync.again) break;
+    }
+    if (Sync.again) { clearTimeout(saveT); saveT = setTimeout(pushNow, 1500); }
+  } catch (e) {
+    if (e.status !== 401) {
+      console.warn('save failed', e); setSaveState('error');
+      Sync.retry = Math.min(Sync.retry + 1, 6); clearTimeout(saveT); saveT = setTimeout(pushNow, Math.min(60000, 2000 * 2 ** Sync.retry));
+    }
+  } finally { Sync.busy = false; }
+}
+
+
+function mergeSit(baseJson, l, r) {            // слияние по полям: ситуация, где одна сторона меняла одно, другая — другое; иначе null (настоящий конфликт)
+  if (!baseJson) return null;
+  const b = JSON.parse(baseJson), lm = { ...sitMeta(l), active:0 }, rm = { ...sitMeta(r), active:0 }, out = { ...lm };
+  for (const k of Object.keys({ ...lm, ...rm })) {
+    if (k === 'id') continue;
+    const lv = JSON.stringify(lm[k]), rv = JSON.stringify(rm[k]), bv = JSON.stringify(b[k]);
+    if (lv === rv || rv === bv) continue;                     // у нас то же самое или на сервере не менялось
+    if (lv === bv) out[k] = rm[k];                            // мы не меняли — берём серверное
+    else return null;                                         // оба изменили одно и то же поле по-разному
+  }
+  out.active = l.active;
+  return normRemoteSit(JSON.parse(JSON.stringify(out)));
+}
+
+async function reconcile() {
+  const j = await API.json('GET', '/api/project'), rev = j.rev, R = j.project;
+  if (!R) { projectRev = rev; Sync.base = snapOf({}, [], [], 0); return; }                   // на сервере пусто — всё локальное «новое»
+  flushState();
+  const B = Sync.base || snapOf({}, [], [], 0);
+  const remSits = new Map((R.sits || []).map(raw => { const s = normRemoteSit(raw); return [s.id, s]; }));
+  const remDocs = new Map(Docs.norm(R.docs).map(d => [d.id, d]));
+  const info = { adopted:0, copies:0 };
+  // --- ситуации ---
+  const locSits = new Map(sits.map(s => [s.id, s])), prevCur = curSit, prevCurId = curSit && curSit.id;
+  const ids = [...sits.map(s => s.id), ...[...remSits.keys()].filter(id => !locSits.has(id))];
+  const outS = [], replaced = []; let mergedSit = null;
+  for (const id of ids) {
+    mergedSit = null;
+    const l = locSits.get(id), r = remSits.get(id), ls = l && sitJ(l), rs = r && sitJ(r), bs = B.sits.get(id);
+    if (ls === rs) { if (l) outS.push(l); }
+    else if (rs === bs) { if (l) outS.push(l); }                                     // на сервере не менялась — остаётся наша
+    else if (ls === bs) { if (r) { outS.push(r); info.adopted++; } if (l) replaced.push(l); }   // мы не трогали — берём серверную (или удалённую там)
+    else if (l && r && (mergedSit = mergeSit(bs, l, r))) { outS.push(mergedSit); replaced.push(l); info.adopted++; }   // разные поля одной ситуации — сливаем
+    else if (l && r) {                                                              // правили обе стороны: наша остаётся, серверная — копией
+      outS.push(l); const c = normRemoteSit(JSON.parse(JSON.stringify(sitMeta(r)))); c.id = uid(); c.name = (r.name || 'Ситуация') + ' (с другого устройства)'; outS.push(c); info.copies++;
+    } else outS.push(l || r);                                                       // одну удалили, другую изменили — не теряем изменённую
+  }
+  if (outS.length) { sits.length = 0; sits.push(...outS); }
+  // --- публикации ---
+  const locDocs = new Map(Docs.serialize().map(d => [d.id, d])), outD = []; let docsChanged = false;
+  const dids = [...locDocs.keys(), ...[...remDocs.keys()].filter(id => !locDocs.has(id))];
+  for (const id of dids) {
+    const l = locDocs.get(id), r = remDocs.get(id), ls = l && docJ(l), rs = r && docJ(r), bs = B.docs.get(id);
+    if (ls === rs) { if (l) outD.push(l); }
+    else if (rs === bs) { if (l) outD.push(l); }
+    else if (ls === bs) { if (r) outD.push(r); docsChanged = true; info.adopted++; }
+    else if (l && r) { outD.push(l, { ...r, id:uid(), title:r.title + ' (с другого устройства)' }); docsChanged = true; info.copies++; }
+    else { outD.push(l || r); if (!l) docsChanged = true; }
+  }
+  if (docsChanged || outD.length !== locDocs.size) Docs.adopt(outD);
+  // --- настройки ---
+  const myS = JSON.stringify(readSettings());
+  if (myS === B.settings && JSON.stringify(R.settings || {}) !== myS) { applySettings(R.settings); info.adopted++; try { render(); } catch {} }
+  // --- вернуть экран в соответствие с моделью ---
+  projectRev = rev;
+  Sync.base = snapOf(R.settings || {}, [...remSits.values()], Docs.norm(R.docs), (R.sa | 0));
+  Sync.base.sa = sits.indexOf(curSit);                                              // «активная ситуация» не считаем изменением
+  const keepCur = sits.find(s => s.id === prevCurId) || sits[0];
+  if (keepCur !== prevCur) {
+    curSit = keepCur; frames = curSit.frames; active = clamp(curSit.active || 0, 0, frames.length - 1);
+    await ensureImages(curSit); loadSitInputs(); renderSitTabs(); renderTiles(); switchTo(active, true);
+  } else renderSitTabs();
+  replaced.forEach(s => { if (s !== curSit) { try { releaseImages(s); } catch {} } });
+  if (info.copies) toast('Изменения с другого устройства объединены с вашими. Версия, которую вы не открывали, сохранена копией «(с другого устройства)».');
+  else if (info.adopted) toast('Подтянуты изменения, сделанные на другом устройстве.');
+  return info;
+}
+async function checkRemote() {                       // другая вкладка/устройство могла сохранить новую версию — подтягиваем, не дожидаясь своей правки
+  if (Sync.busy || document.hidden || Auth.blocked || !curSit) return;
+  try {
+    const { rev } = await API.json('GET', '/api/project/rev');
+    if (rev === projectRev || Sync.busy) return;
+    Sync.busy = true; try { await reconcile(); } finally { Sync.busy = false; }
+    pushNow();
+  } catch { /* нет сети — попробуем позже */ }
+}
+setInterval(checkRemote, 45000);
+document.addEventListener('visibilitychange', () => { if (document.hidden) save(true); else checkRemote(); });
 window.addEventListener('pagehide', () => save(true));
+window.addEventListener('beforeunload', e => { if (curSit && !Auth.blocked && (Sync.busy || Sync.queued) && Sync.unsaved()) { e.preventDefault(); e.returnValue = ''; } });
 
 async function gcImages() {                // удалить картинки, на которые больше никто не ссылается
   try {
@@ -3107,6 +3222,7 @@ const Auth = {
 async function boot() {
   let idx = await loadProject();
   if (idx === null && await offerLocalImport()) idx = await loadProject();
+  const fresh = idx === null;                 // пустой аккаунт: первое сохранение должно записать стартовую ситуацию
   if (idx === null) {
     const s = makeSit('Ситуация 1'); s.frames = []; s.counter = 0;
     s.frames.push(newFrame([
@@ -3123,6 +3239,7 @@ async function boot() {
   Docs.start();
   await (document.fonts?.ready || Promise.resolve());
   await switchSit(idx);
+  if (!fresh) Sync.rebase();
   clearTimeout(gcT); gcT = setTimeout(() => { gcImages(); updateStorage(); }, 4000);
   updateStorage();
   window.__ready = true;

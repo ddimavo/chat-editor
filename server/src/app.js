@@ -184,6 +184,10 @@ function createApp() {
     res.json({ project: { v: 2, settings: JSON.parse(st.settings), sa: st.active, sits, docs: q.docs.all(uid) }, rev: st.rev });
   });
 
+  app.get('/api/project/rev', needAuth, (req, res) => {          // лёгкая проверка: не менялся ли проект на другом устройстве
+    const st = q.state.get(req.user.id); res.set('Cache-Control', 'no-store').json({ rev: st ? st.rev : 0 });
+  });
+
   app.put('/api/project', needAuth, json, (req, res) => {
     const uid = req.user.id, { project: p, base } = req.body || {};
     if (!p || p.v !== 2 || !Array.isArray(p.sits) || typeof p.settings !== 'object' || p.settings === null) return res.status(400).json({ error: 'Некорректный формат проекта.' });

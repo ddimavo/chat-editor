@@ -79,6 +79,7 @@ test('проект: сохранение, версии и конфликты', a
   assert.equal(r.data.rev, 2);
   r = await c.call('GET', '/api/project');
   assert.deepEqual(r.data.project.sits.map(s => s.name), ['Вторая (изм.)', 'Первая']);                         // порядок сохраняется, удалённые пропадают
+  assert.deepEqual((await c.call('GET', '/api/project/rev')).data, { rev: 2 });                                // лёгкая проверка версии
   assert.equal((await c.call('PUT', '/api/project', { project: { v: 2, sits: 'x' }, base: 2 })).status, 400);
   assert.equal((await c.call('PUT', '/api/project', { project: project([{ id: '../bad', frames: [] }]), base: 2 })).status, 400);
 });

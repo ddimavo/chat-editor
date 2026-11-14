@@ -80,7 +80,7 @@ const Docs = (() => {
   const usedImageIds = () => { const s = new Set(); for (const d of list) for (const m of d.html.matchAll(/\/api\/images\/([A-Za-z0-9_-]{8,64})/g)) s.add(m[1]); return s; };
 
   /* ---------- сохранение ---------- */
-  function touch() { if (!cur) return; cur.html = serialize(); cur.t = Date.now(); renderList(); renderFields(); if (save) save(); }
+  function touch() { if (!cur) return; cur._dirty = true; cur.html = serialize(); cur.t = Date.now(); renderList(); renderFields(); if (save) save(); }
   function commitCode(html) { cur.html = html; cur.t = Date.now(); if (save) save(); }
 
   /* ---------- история правок (собственная: браузерная не видит программные изменения) ---------- */
@@ -89,7 +89,7 @@ const Docs = (() => {
     const s = serialize(); if (hist[hpos] === s && !force) return;
     hist = hist.slice(0, hpos + 1); hist.push(s); if (hist.length > 120) hist.shift(); hpos = hist.length - 1; updUndo();
   }
-  function snap() { clearTimeout(histT); pushHist(); touch(); }
+  function snap() { clearTimeout(histT); if (cur) cur._dirty = true; pushHist(); touch(); }
   function typed() { clearTimeout(histT); histT = setTimeout(snap, 450); }
   function restore(i) {
     if (i < 0 || i >= hist.length) return; hpos = i; rendering = true;
@@ -125,7 +125,7 @@ const Docs = (() => {
 
   /* ---------- открыть публикацию ---------- */
   function open(id) {
-    if (cur && idoc && mode === 'visual') cur.html = serialize();
+    if (cur && idoc && mode === 'visual' && cur._dirty) cur.html = serialize();
     cur = list.find(d => d.id === id) || null; selEl = null; showCur(); renderList();
     try { localStorage.setItem('ceDoc', cur ? cur.id : ''); } catch {}
   }
@@ -141,7 +141,7 @@ const Docs = (() => {
   function setMode(m, force) {
     if (!cur) return;
     if (mode === 'code' && m !== 'code' && !force) { /* код → применить */ cur.html = parseSource($d('dcCode').value); }
-    if (mode === 'visual' && m === 'code' && idoc && !force) cur.html = serialize();
+    if (mode === 'visual' && m === 'code' && idoc && !force && cur._dirty) cur.html = serialize();
     mode = m;
     document.querySelectorAll('#dcModes [data-m]').forEach(b => b.classList.toggle('active', b.dataset.m === m));
     $d('dcFrameBox').style.display = m === 'code' ? 'none' : 'block';
@@ -488,7 +488,7 @@ const Docs = (() => {
     document.querySelectorAll('#modeSw [data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
     try { localStorage.setItem('ceMode', m); } catch {}
     if (m === 'docs') { ensureInit(); renderList(); if (cur) showCur(); }
-    else if (cur && idoc && mode === 'visual') cur.html = serialize();
+    else if (cur && idoc && mode === 'visual' && cur._dirty) cur.html = serialize();
   }
   function ensureInit() { if (ready) return; ready = true; initUI(); }
   function initUI() {
@@ -530,8 +530,13 @@ const Docs = (() => {
 
   return {
     KINDS,
-    load(arr) { list = Array.isArray(arr) ? arr.filter(d => d && typeof d.id === 'string').map(d => ({ id:d.id, kind: KINDS[d.kind] ? d.kind : 'other', title: String(d.title || 'Без названия'), html: String(d.html || ''), t: d.t || Date.now() })) : []; cur = null; },
-    serialize() { if (cur && idoc && mode === 'visual') cur.html = serialize(); else if (cur && mode === 'code' && $d('dcCode')) cur.html = parseSource($d('dcCode').value); return list.map(d => ({ id:d.id, kind:d.kind, title:d.title, html:d.html, t:d.t })); },
+    norm(arr) { return Array.isArray(arr) ? arr.filter(d => d && typeof d.id === 'string').map(d => ({ id:d.id, kind: KINDS[d.kind] ? d.kind : 'other', title: String(d.title || 'Без названия'), html: String(d.html || ''), t: d.t || Date.now() })) : []; },
+    load(arr) { list = Docs.norm(arr); cur = null; },
+    adopt(arr) {                                         // подтянуть изменения с сервера, не сбивая открытую публикацию без нужды
+      const keep = cur && cur.id, before = cur && cur.html; list = Docs.norm(arr); cur = keep ? list.find(d => d.id === keep) || null : null;
+      if (ready) { renderList(); if (document.getElementById('app').dataset.mode === 'docs' && (!cur || cur.html !== before)) showCur(); }
+    },
+    serialize() { if (cur && idoc && mode === 'visual' && cur._dirty) cur.html = serialize(); return list.map(d => ({ id:d.id, kind:d.kind, title:d.title, html:d.html, t:d.t })); },
     inline: inlineImages,
     async uploadEmbedded(html) {
       const seen = new Map();
