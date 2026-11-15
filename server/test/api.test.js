@@ -15,7 +15,11 @@ process.env.PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
 const { createApp } = require('../src/app');
 const server = createApp().listen(0);
 const base = `http://127.0.0.1:${server.address().port}`;
-test.after(() => { server.close(); fs.rmSync(tmp, { recursive: true, force: true }); });
+test.after(() => {
+  server.close();
+  try { require('../src/db').db.close(); } catch { /* уже закрыта */ }          // Windows не даёт удалить открытый файл базы
+  try { fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch { /* временная папка — не критично */ }
+});
 
 const H = { 'X-Requested-With': 'chat-editor' };
 class Client {
