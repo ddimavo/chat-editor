@@ -83,6 +83,18 @@
   .stab button:hover { background:var(--danger); color:#fff; }
   #storInfo { font-size:11.5px; white-space:nowrap; }
   .menuwrap { position:relative; }
+  #sitDD { display:flex; align-items:center; gap:7px; max-width:230px; } #sitDD .nm { max-width:150px; font-weight:600; }
+  #sitDD .cnt { font-size:11px; background:var(--panel3); color:var(--muted); border-radius:999px; padding:0 7px; flex:none; }
+  .menu.sitmenu { left:0; right:auto; width:min(380px,92vw); padding:8px; }
+  .sitmenu input { margin-bottom:6px; }
+  #sitItems { max-height:min(60vh,440px); overflow-y:auto; }
+  .sitmenu .sit { display:flex; align-items:center; gap:8px; padding:7px 9px; border-radius:var(--rs); cursor:pointer; }
+  .sitmenu .sit:hover, .sitmenu .sit.hi { background:var(--panel3); }
+  .sitmenu .sit.active { background:var(--accent-soft); color:var(--accent); font-weight:600; }
+  .sitmenu .sit .n { color:var(--faint); font-size:11.5px; min-width:22px; text-align:right; flex:none; }
+  .sitmenu .sit .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sitmenu .sit .cnt { font-size:11px; background:var(--panel3); color:var(--muted); border-radius:999px; padding:0 7px; flex:none; }
+  .sitmenu .sit button { width:auto; padding:0 6px; font-size:11px; background:transparent; color:var(--faint); flex:none; } .sitmenu .sit button:hover { background:var(--danger); color:#fff; }
   .menu { position:absolute; right:0; top:calc(100% + 6px); min-width:240px; background:var(--panel); border:1px solid var(--border); border-radius:var(--r); box-shadow:var(--shadow); padding:6px; display:none; z-index:60; }
   .menuwrap.open .menu { display:block; }
   .menu button { display:block; width:100%; text-align:left; background:transparent; border:0; padding:8px 10px; }
@@ -223,7 +235,7 @@
   #modeSw { display:flex; gap:2px; padding:3px; background:var(--panel2); border:1px solid var(--border); border-radius:10px; flex:none; }
   #modeSw button { border:0; background:transparent; padding:5px 12px; font-weight:600; color:var(--muted); }
   #modeSw button.active { background:var(--accent-soft); color:var(--accent); }
-  #app[data-mode="docs"] #body, #app[data-mode="docs"] #sitTabs, #app[data-mode="docs"] #addSit, #app[data-mode="docs"] #copy, #app[data-mode="docs"] #exBtn { display:none; }
+  #app[data-mode="docs"] #body, #app[data-mode="docs"] #sitTabs, #app[data-mode="docs"] #sitWrap, #app[data-mode="docs"] #addSit, #app[data-mode="docs"] #copy, #app[data-mode="docs"] #exBtn { display:none; }
   #app:not([data-mode="docs"]) #docsView { display:none; }
   #docsView { display:grid; grid-template-columns:var(--wl) minmax(0,1fr) var(--wr); min-height:0; }
   #dcLeft { display:flex; flex-direction:column; min-height:0; background:var(--panel); border-right:1px solid var(--border); }
@@ -286,6 +298,13 @@
 <header id="topbar">
   <div class="brand"><span class="logo">SA</span><b>Chat Studio</b></div>
   <div id="modeSw"><button data-mode="shots" class="active" title="Реплики и скриншоты">🖼 Скриншоты</button><button data-mode="docs" title="Пресс-релизы, газеты, статьи, эфиры, анонсы — HTML-заготовки">📰 Публикации</button></div>
+  <div class="menuwrap" id="sitWrap">
+    <button data-menu id="sitDD" title="Все ситуации — список с поиском"><span class="nm ellipsis" id="sitDDname"></span><span class="cnt" id="sitDDcnt"></span> ▾</button>
+    <div class="menu sitmenu">
+      <input type="text" id="sitQ" placeholder="Найти ситуацию…" autocomplete="off">
+      <div id="sitItems"></div>
+    </div>
+  </div>
   <nav id="sitTabs" aria-label="Ситуации"></nav>
   <button id="addSit" class="ibtn" title="Новая ситуация">＋</button>
   <div class="sp"></div>
@@ -921,8 +940,35 @@ function renderSitTabs() {
     box.appendChild(d);
   });
   $('framesOf').textContent = curSit ? curSit.name : '';
+  renderSitMenu();
   box.querySelector('.active')?.scrollIntoView({ block:'nearest', inline:'nearest' });
 }
+let sitHi = -1;
+function sitMatches() { const q = $('sitQ').value.trim().toLowerCase(); return sits.map((s, i) => ({ s, i })).filter(x => !q || (x.s.name || '').toLowerCase().includes(q)); }
+function renderSitMenu() {
+  $('sitDDname').textContent = curSit ? (curSit.name || 'Без названия') : ''; $('sitDDcnt').textContent = sits.length;
+  const box = $('sitItems'), list = sitMatches(); box.innerHTML = '';
+  if (sitHi >= list.length) sitHi = list.length - 1;
+  list.forEach((x, k) => {
+    const d = document.createElement('div'); d.className = 'sit' + (x.s === curSit ? ' active' : '') + (k === sitHi ? ' hi' : '');
+    d.innerHTML = `<span class="n">${x.i + 1}</span><span class="nm" title="${esc(x.s.name || '')}">${esc(x.s.name || 'Без названия')}</span><span class="cnt" title="Кадров">${x.s.frames.length}</span><button title="Удалить ситуацию">✕</button>`;
+    d.onclick = () => { $('sitWrap').classList.remove('open'); if (x.s !== curSit) switchSit(sits.indexOf(x.s)); };
+    d.querySelector('button').onclick = e => { e.stopPropagation(); delSit(sits.indexOf(x.s)); };
+    box.appendChild(d);
+  });
+  if (!list.length) box.innerHTML = '<div class="hint" style="padding:8px">Ничего не найдено.</div>';
+}
+$('sitDD').addEventListener('click', () => setTimeout(() => {
+  if (!$('sitWrap').classList.contains('open')) return;
+  $('sitQ').value = ''; sitHi = -1; renderSitMenu(); $('sitQ').focus(); $('sitItems').querySelector('.active')?.scrollIntoView({ block:'center' });
+}, 0));
+$('sitQ').oninput = () => { sitHi = $('sitQ').value.trim() ? 0 : -1; renderSitMenu(); };
+$('sitQ').onkeydown = e => {
+  const list = sitMatches();
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); sitHi = Math.max(0, Math.min(list.length - 1, sitHi + (e.key === 'ArrowDown' ? 1 : -1))); renderSitMenu(); $('sitItems').querySelector('.hi')?.scrollIntoView({ block:'nearest' }); }
+  else if (e.key === 'Enter') { const x = list[Math.max(0, sitHi)]; if (x) { $('sitWrap').classList.remove('open'); if (x.s !== curSit) switchSit(sits.indexOf(x.s)); } }
+  else if (e.key === 'Escape') $('sitWrap').classList.remove('open');
+};
 async function addSit() {
   flushState();
   sits.push(makeSit('Ситуация ' + (sits.length + 1), curSit));
