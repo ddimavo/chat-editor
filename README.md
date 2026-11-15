@@ -23,7 +23,42 @@
 * Скрипты, формы, `iframe`, `onclick` и т. п. при вставке вырезаются; документ показывается в изолированном `iframe`.
 * Публикации хранятся в аккаунте (таблица `docs`, миграция применяется автоматически) и входят в резервную копию проекта.
 
-## Автообновление (без клонирования и ручной пересборки)
+## Windows Server (без Docker)
+
+Linux-контейнеры на Windows Server 2019 не работают, поэтому там приложение запускается **напрямую**: в архиве лежит и сам Node.js, и приложение
+со всеми зависимостями — ничего ставить не нужно. Подходит Windows Server 2016 / 2019 / 2022, 64-бит.
+
+**Установка** (PowerShell **от имени администратора**):
+
+```powershell
+Invoke-WebRequest https://raw.githubusercontent.com/ddimavo/chat-editor/main/windows/install.ps1 -OutFile install.ps1 -UseBasicParsing
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Port 8420
+```
+
+Скрипт скачивает последнюю сборку в `C:\ChatStudio`, открывает порт в брандмауэре, создаёт две задачи планировщика (`ChatStudio` — сервер,
+запускается при старте системы и перезапускается при сбое; `ChatStudio-Update` — автообновление раз в 5 минут) и запускает приложение.
+Откройте `http://IP_СЕРВЕРА:8420`. Сборка для Windows появляется после первого запуска GitHub Actions «Build Windows package» (вкладка *Actions*, 2–4 минуты).
+
+**Автообновление:** `git push` → GitHub Actions тестирует на Windows и собирает пакет → сервер сам скачивает его, перезапускает приложение и проверяет `/healthz`;
+если новая версия не запустилась — откатывается на прежнюю (`C:\ChatStudio\previous`). Данные (`C:\ChatStudio\data`) при обновлении не трогаются.
+
+| Что | Как |
+|---|---|
+| Настройки (порт, закрыть регистрацию, код приглашения, HTTPS-флаги) | `C:\ChatStudio\settings.env`, затем `Stop-ScheduledTask ChatStudio; Start-ScheduledTask ChatStudio` |
+| Журналы | `C:\ChatStudio\logs\app.log` (сервер), `update.log` (обновления) |
+| Обновить прямо сейчас | `powershell -ExecutionPolicy Bypass -File C:\ChatStudio\update.ps1 -Force` |
+| Пользователи, пароли, копия базы | `C:\ChatStudio\cli.cmd users` · `create <логин>` · `passwd <логин>` · `backup` (копии — в `data\backups`, раз в сутки делаются сами) |
+| Сменить порт | поправьте `PORT=` в `settings.env` и запустите `install.ps1` ещё раз (обновит брандмауэр) |
+| Удалить | `Unregister-ScheduledTask ChatStudio, ChatStudio-Update -Confirm:$false`, правило брандмауэра «Chat Studio» и папка `C:\ChatStudio` |
+
+**HTTPS:** без него логины и пароли идут открытым текстом. Проще всего — IIS (URL Rewrite + Application Request Routing) или Caddy для Windows
+как обратный прокси на `http://127.0.0.1:8420` с сертификатом Let's Encrypt; в `settings.env` тогда добавьте `TRUST_PROXY=1` и `COOKIE_SECURE=true`.
+Строки в `settings.env` пишите как `ИМЯ=значение`, без пробелов вокруг `=` и без пустых значений.
+
+**Перенос данных с Linux-сервера:** на старом выполните `./scripts/backup.sh`, скопируйте файл `backups/chat-editor-….sqlite` на Windows-сервер,
+остановите задачу `ChatStudio` и положите файл как `C:\ChatStudio\data\chat-editor.sqlite` (удалив рядом `-wal`/`-shm`, если есть), затем запустите задачу.
+
+## Автообновление (Linux, Docker)
 
 Схема: вы делаете коммит в `main` → **GitHub Actions** прогоняет тесты, собирает Docker-образ и публикует его в `ghcr.io` →
 сервер раз в 2 минуты проверяет новый образ и сам перезапускает приложение. Исходники на сервере не нужны, данные (том `/data`) сохраняются.

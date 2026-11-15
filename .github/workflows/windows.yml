@@ -1,0 +1,55 @@
+# После каждого пуша в main: тесты на Windows → пакет для Windows Server (Node + приложение, ничего ставить не нужно)
+# → публикация в релиз «windows-latest». Сервер сам подхватывает его (windows/update.ps1, раз в 5 минут).
+name: Build Windows package
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Tests (Windows)
+        shell: pwsh
+        working-directory: server
+        run: |
+          npm ci
+          npm test
+      - name: Package
+        shell: pwsh
+        run: |
+          Remove-Item server\node_modules -Recurse -Force
+          npm ci --omit=dev --prefix server
+          $sha = "${{ github.sha }}".Substring(0, 7)
+          $ver = "$sha $((Get-Date).ToUniversalTime().ToString('yyyy-MM-dd HH:mm')) UTC"
+          $pkg = 'dist\pkg'
+          New-Item -ItemType Directory -Force -Path "$pkg\server" | Out-Null
+          Copy-Item server\src, server\package.json, server\package-lock.json, server\node_modules -Destination "$pkg\server" -Recurse
+          Copy-Item public -Destination $pkg -Recurse
+          Copy-Item windows -Destination $pkg -Recurse
+          Copy-Item (Get-Command node).Source -Destination "$pkg\node.exe"
+          Set-Content -Path "$pkg\version.txt" -Value $ver -Encoding ASCII
+          Copy-Item "$pkg\version.txt" dist\version.txt
+          Compress-Archive -Path "$pkg\*" -DestinationPath dist\chat-studio-windows.zip
+          Get-ChildItem dist | Format-Table Name, Length
+      - name: Publish rolling release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete windows-latest --cleanup-tag --yes 2>$null
+          $global:LASTEXITCODE = 0
+          gh release create windows-latest dist\chat-studio-windows.zip dist\version.txt --title "Windows build (auto)" --notes "Автоматическая сборка для Windows Server. Устанавливается скриптом windows/install.ps1, обновляется сам." --target ${{ github.sha }} --latest=false
